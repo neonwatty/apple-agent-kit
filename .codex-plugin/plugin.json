@@ -1,0 +1,39 @@
+{
+  "name": "apple-agent-kit",
+  "version": "0.1.0",
+  "description": "Proof-driven automation patterns for macOS and iOS app work with coding agents.",
+  "author": {
+    "name": "Neon Watty",
+    "url": "https://github.com/neonwatty"
+  },
+  "homepage": "https://github.com/neonwatty/apple-agent-kit",
+  "repository": "https://github.com/neonwatty/apple-agent-kit",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "claude-code",
+    "macos",
+    "ios",
+    "xcode",
+    "automation"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Apple Agent Kit",
+    "shortDescription": "macOS and iOS automation playbooks for coding agents.",
+    "longDescription": "Reusable Codex skills, templates, scripts, and evidence conventions for building, testing, and auditing Apple apps with coding agents and CI.",
+    "developerName": "Neon Watty",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Write",
+      "Interactive"
+    ],
+    "websiteURL": "https://github.com/neonwatty/apple-agent-kit",
+    "defaultPrompt": [
+      "Inspect this Apple app repo and recommend automation setup.",
+      "Add proof-driven macOS CI for this app.",
+      "Prepare an iOS physical-device smoke test."
+    ],
+    "brandColor": "#0F766E"
+  }
+}

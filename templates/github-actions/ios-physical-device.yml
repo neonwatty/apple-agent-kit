@@ -1,0 +1,41 @@
+name: iOS Physical Device Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      smoke_profile:
+        description: iOS UI smoke profile
+        required: true
+        default: pr
+        type: choice
+        options: [fast, pr, full, live]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-physical-device
+  cancel-in-progress: false
+
+jobs:
+  physical-smoke:
+    runs-on: [self-hosted, macOS, ios-physical]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Runner preflight
+        run: ./scripts/ios-physical-runner-preflight.sh
+      - name: Physical device smoke
+        env:
+          IOS_UI_SMOKE_PROFILE: ${{ inputs.smoke_profile }}
+        run: ./scripts/ios-device-smoke.sh
+      - name: Upload result bundle
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-physical-results
+          path: |
+            **/*.xcresult
+            artifacts/**
+          if-no-files-found: ignore
+          retention-days: 14

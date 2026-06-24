@@ -1,0 +1,31 @@
+name: iOS Simulator CI
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  ios-simulator:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.3.app/Contents/Developer
+      - name: Build
+        run: ./scripts/ios-build.sh
+      - name: Unit tests
+        run: ./scripts/ios-test.sh
+      - name: UI smoke
+        run: ./scripts/ios-ui-smoke.sh
+      - name: Upload result bundles
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-result-bundles
+          path: |
+            **/*.xcresult
+          retention-days: 14

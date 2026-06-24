@@ -1,0 +1,9 @@
+.DS_Store
+DerivedData/
+build/
+*.xcresult
+*.xcarchive
+*.ipa
+*.dSYM
+artifacts/
+.apple-agent-kit.local.*

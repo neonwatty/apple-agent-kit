@@ -1,0 +1,30 @@
+{
+  "name": "example-preview",
+  "platforms": {
+    "macos": {
+      "project": "App.xcodeproj",
+      "scheme": "App",
+      "destination": "platform=macOS",
+      "derivedDataPath": "build",
+      "appSmokeCommand": "make app-smoke"
+    },
+    "ios": {
+      "project": "apple/App.xcodeproj",
+      "scheme": "AppPreview",
+      "uiScheme": "AppPreview",
+      "uiTestTarget": "AppPreviewUITests",
+      "simulatorDestination": "platform=iOS Simulator,name=iPhone 16",
+      "physicalDeviceName": "Preview iPhone",
+      "bundleIdentifier": "com.example.app.preview"
+    }
+  },
+  "ci": {
+    "macosRunner": "macos-15",
+    "physicalRunnerLabels": ["self-hosted", "macOS", "ios-physical"]
+  },
+  "privacy": {
+    "screenshots": "sterile-only",
+    "rawAccessibilityTrees": false,
+    "redactSecrets": true
+  }
+}
