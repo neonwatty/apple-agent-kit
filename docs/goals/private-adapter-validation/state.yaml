@@ -1,0 +1,199 @@
+version: 2
+
+goal:
+  title: "Private Adapter Validation"
+  slug: "private-adapter-validation"
+  kind: existing_plan
+  tranche: "Validate Apple Agent Kit against one selected private Apple app repo using dry-run commands only."
+  status: active
+  oracle:
+    signal: "A selected private adapter validates, `aak inspect` succeeds, workflows render into scratch/private output, comparison findings are recorded, public leakage checks pass, and final readiness is decided."
+    cadence: "after each Worker package and at final audit"
+    final_proof: "Final Judge or PM receipt records full_outcome_complete: true and lists the private dry-run checks, comparison evidence, public leakage check, and infrastructure go/no-go decision."
+  intake:
+    original_request: "Plan the private-adapter validation tranche with GoalBuddy prep."
+    interpreted_outcome: "Prepare a GoalBuddy board for validating Apple Agent Kit against one private app repo without leaking private details or touching real infrastructure."
+    input_shape: existing_plan
+    audience: "Apple Agent Kit maintainers and private adapter maintainers."
+    authority: approved
+    proof_type: test
+    completion_proof: "One selected private adapter is validated, inspected, rendered, compared, and audited with no public leakage and no real infrastructure side effects."
+    likely_misfire: "Running physical or self-hosted workflows too early, committing private details to the public repo, or treating adapter creation as proof without dry-run validation."
+    blind_spots_considered:
+      - "Where private adapter files should live."
+      - "How to refer to a private repo without committing its name to public history."
+      - "Rendered workflow output should live in scratch or private paths."
+      - "Public repo leakage checks must run after private work."
+      - "Physical-device and self-hosted runner work must remain a later approved tranche."
+    existing_plan_facts:
+      - "Start with one selected private Apple app repo."
+      - "Run dry-run commands first: validate-adapter, inspect, render-workflows."
+      - "Compare rendered workflows to existing private workflows."
+      - "Do not run Mac Mini, iPhone, WDA, install, screenshot, or host-app automation in this tranche."
+      - "Decide readiness for a later infrastructure-testing tranche."
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  exact_human_approval_can_terminal_wait: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+  goal_pressure_requires_oracle: true
+  no_completion_on_weak_proof: true
+  slice_policy:
+    max_consecutive_tiny_tasks: 2
+    prefer_vertical_slices: true
+    judge_picks_largest_safe_slice: true
+    worker_completes_whole_slice: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: installed
+
+visual_board:
+  selected: local
+  local:
+    status: live
+    url: "http://goalbuddy.localhost:41737/private-adapter-validation/"
+    command: "node /Users/neonwatty/.codex/plugins/cache/goalbuddy/goalbuddy/0.3.9/skills/goalbuddy/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/private-adapter-validation"
+
+active_task: T001
+
+tasks:
+  - id: T001
+    type: scout
+    assignee: Scout
+    status: active
+    reasoning_hint: medium
+    objective: "Identify the selected private repo path, existing private workflow surface, and safe adapter location without writing files or running infrastructure workflows."
+    inputs:
+      - "Goal charter."
+      - "User-provided private target context from the conversation or operator prompt."
+      - "Local filesystem/GitHub access, read-only."
+      - "Public Apple Agent Kit CLI commands, read-only."
+    constraints:
+      - "Read-only."
+      - "Do not write adapter files."
+      - "Do not commit private repo names or private values to the public repo."
+      - "Do not run physical-device, WDA, install, screenshot, host-app, or self-hosted runner workflows."
+      - "Do not print secrets, tokens, signing values, bundle IDs, device IDs, or private runner labels in public committed notes."
+    expected_output:
+      - "Selected private repo path or a precise blocker if the target is ambiguous."
+      - "Private workflow/script/test surfaces relevant to adapter validation, summarized safely."
+      - "Recommended private adapter path."
+      - "Candidate Worker package with allowed files, verify commands, and stop conditions."
+    receipt: null
+
+  - id: T002
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Review T001 findings and choose the largest safe Worker package for private adapter creation or validation."
+    inputs:
+      - "T001 receipt or note."
+      - "Goal oracle."
+      - "Current public repo status."
+    constraints:
+      - "Do not implement."
+      - "Keep physical-device and self-hosted workflow execution out of scope."
+      - "Keep private details out of public committed files."
+      - "Set explicit allowed_files, verify commands, and stop_if conditions."
+    expected_output:
+      - "Decision: approved | revise | blocked."
+      - "Exact Worker objective."
+      - "allowed_files."
+      - "verify."
+      - "stop_if."
+      - "Deferred follow-up tasks, if any."
+    receipt: null
+
+  - id: T003
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: medium
+    objective: "Create or update the selected private adapter and run dry-run validation selected by Judge."
+    allowed_files: []
+    verify: []
+    stop_if:
+      - "Need files outside Judge-approved allowed_files."
+      - "Need to commit private values to the public repo."
+      - "Need physical-device, WDA, install, screenshot, host-app, or self-hosted runner execution."
+      - "Adapter schema or target repo is ambiguous."
+      - "Verification fails twice for the same reason."
+    receipt: null
+
+  - id: T004
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: medium
+    objective: "Render workflows into scratch/private output and compare them against the selected private repo's existing workflows."
+    allowed_files: []
+    verify: []
+    stop_if:
+      - "Need physical-device or self-hosted runner execution."
+      - "Need to commit rendered private workflows to the public repo."
+      - "Need files outside PM/Judge-approved allowed_files."
+      - "Rendered workflow differences imply a public kit change is needed before private validation can continue."
+    receipt: null
+
+  - id: T005
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Decide whether private dry-run validation is sufficient to plan a later infrastructure-testing tranche."
+    inputs:
+      - "Done Worker receipts."
+      - "Adapter validation result."
+      - "Rendered workflow comparison result."
+      - "Public leakage check."
+    constraints:
+      - "Read-only."
+      - "Do not run Mac Mini, iPhone, WDA, install, screenshot, host-app, or self-hosted workflows."
+      - "Do not expose private details in public committed notes."
+    expected_output:
+      - "readiness: ready | not_ready."
+      - "Required approvals or private inputs for next tranche."
+      - "Recommended next GoalBuddy goal or task."
+    receipt: null
+
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Final audit: decide whether the private-adapter dry-run validation tranche is complete."
+    inputs:
+      - "All done task receipts."
+      - "Last verification commands."
+      - "Current dirty diff in public and private repos."
+      - "Goal oracle."
+    constraints:
+      - "Do not implement."
+      - "Reject completion if required Worker work remains queued or active."
+      - "Reject completion if validation, rendering, comparison, or leakage proof is missing."
+      - "Reject completion if real infrastructure was touched during this tranche."
+    expected_output:
+      - "complete | not_complete."
+      - "full_outcome_complete: true | false."
+      - "Evidence mapped to the oracle."
+      - "Missing evidence or next task if not complete."
+    receipt: null
+
+checks:
+  dirty_fingerprint: unknown
+  last_verification:
+    result: unknown
+    task: null
+    commands: []
