@@ -15,6 +15,14 @@ The kit has four layers:
 3. Templates: GitHub Actions, Makefile, adapter, and receipt templates.
 4. Adapter contract: A small repo-local configuration file that maps generic concepts to private app values.
 
+The v0 command entrypoint is `scripts/aak.py`. It is intentionally dependency-free and dry-run oriented:
+
+- `inspect`
+- `validate-adapter`
+- `render-workflows`
+- `check-xcode`
+- `summarize-xcresult`
+
 ## Initial Skill Set
 
 - `apple-agent-intake`: inspect an Apple repo and choose relevant automation tracks.
@@ -29,7 +37,7 @@ The kit has four layers:
 
 The public kit reads a repo-local adapter file and validates that required values exist before running commands. The adapter is the only place that should name a product, a real device, a runner label, a team ID, or a secret.
 
-The kit should support dry runs first. Commands that touch physical devices, install apps, start WDA, or interact with host apps require explicit user approval in the calling workflow.
+The kit supports dry runs first. Commands that touch physical devices, install apps, start WDA, dispatch self-hosted workflows, or interact with host apps require explicit user approval in the calling workflow and are out of scope for v0.
 
 ## Evidence Model
 

@@ -46,3 +46,19 @@ The recommended file name is `.apple-agent-kit.json` for machine-readable use. Y
 - Do not require secrets for dry-run validation.
 - Refuse physical-device actions if the adapter is missing a privacy policy.
 - Prefer explicit receipt files over prose-only claims.
+
+## Validation
+
+Validate an adapter with:
+
+```bash
+python3 scripts/aak.py validate-adapter .apple-agent-kit.json
+```
+
+Render workflow templates into a scratch directory with:
+
+```bash
+python3 scripts/aak.py render-workflows --adapter .apple-agent-kit.json --output /tmp/aak-workflows --force
+```
+
+Review rendered workflows before copying them into a private repository.

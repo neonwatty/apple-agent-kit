@@ -20,6 +20,20 @@ The public kit contains reusable patterns only: skills, scripts, templates, rece
 - `scripts/` - Generic helper scripts that must not contain app-specific values.
 - `templates/` - Reusable workflow and config templates.
 
+## v0 Commands
+
+The v0 command surface is dependency-free Python and dry-run oriented:
+
+```bash
+python3 scripts/aak.py inspect --repo . --adapter templates/adapter.example.json --json
+python3 scripts/aak.py validate-adapter templates/adapter.example.json
+python3 scripts/aak.py render-workflows --adapter templates/adapter.example.json --output /tmp/aak-render --force
+python3 scripts/aak.py check-xcode --json
+python3 scripts/aak.py summarize-xcresult path/to/TestResults.xcresult --json
+```
+
+These commands do not install apps, boot simulators, start WDA, launch host apps, dispatch CI workflows, or touch physical devices.
+
 ## Private Adapters
 
 Private adapters provide concrete values for a repo:
@@ -37,4 +51,4 @@ See [docs/adapter-contract.md](docs/adapter-contract.md).
 
 ## Status
 
-This repo is at design scaffold stage. The first implementation milestone is to add generic validation and dry-run commands before any physical runner or iPhone workflow is exercised.
+This repo is at v0 dry-run stage. Physical runner and iPhone workflows should be validated only through private adapters and explicit operator approval.

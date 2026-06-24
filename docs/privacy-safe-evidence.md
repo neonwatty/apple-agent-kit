@@ -24,3 +24,11 @@ Automation evidence should prove behavior without exposing private data.
 ## Receipt Requirement
 
 Before declaring a run complete, the agent should try to disprove the result and record what it checked. Passing happy-path tests alone is not enough.
+
+For local Xcode readiness, prefer:
+
+```bash
+python3 scripts/aak.py check-xcode --json
+```
+
+The JSON summary reports runtime counts rather than raw simulator rows.

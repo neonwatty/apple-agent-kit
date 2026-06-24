@@ -5,7 +5,7 @@ goal:
   slug: "v0-dry-run-automation"
   kind: existing_plan
   tranche: "Complete the public v0 dry-run command surface and proof loop without touching private adapters, physical devices, or self-hosted runners."
-  status: active
+  status: done
   oracle:
     signal: "Adapter validation, plugin validation, CLI dry-run commands, workflow rendering checks, and private-identifier leakage grep all pass."
     cadence: "after each Worker package and at final audit"
@@ -66,13 +66,13 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/v0-dry-run-automation/"
     command: "node /Users/neonwatty/.codex/plugins/cache/goalbuddy/goalbuddy/0.3.9/skills/goalbuddy/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/v0-dry-run-automation"
 
-active_task: T001
+active_task: null
 
 tasks:
   - id: T001
     type: scout
     assignee: Scout
-    status: active
+    status: done
     reasoning_hint: medium
     objective: "Map the current public scaffold, plugin constraints, verification commands, and the smallest useful v0 dry-run implementation path."
     inputs:
@@ -95,12 +95,34 @@ tasks:
       - "Verification commands available now."
       - "Risk list focused on public/private leakage and weak proof."
       - "Candidate Worker package with likely allowed_files, verify commands, and stop conditions."
-    receipt: null
+    receipt:
+      result: done
+      note: "notes/T001-scout.md"
+      summary: "Mapped the scaffold and found the main gap: no executable unified dry-run CLI yet."
+      evidence:
+        - ".codex-plugin/plugin.json"
+        - "README.md"
+        - "docs/design.md"
+        - "docs/adapter-contract.md"
+        - "scripts/validate-adapter.py"
+        - "scripts/inspect-xcode-env.sh"
+        - "templates/github-actions/"
+      commands:
+        - cmd: "scripts/validate-adapter.py templates/adapter.example.json"
+          status: pass
+        - cmd: "PYTHONPATH=/tmp/apple-agent-kit-pydeps python3 /Users/neonwatty/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py /Users/neonwatty/Desktop/apple-agent-kit"
+          status: pass
+        - cmd: "scripts/inspect-xcode-env.sh | sed -n '1,120p'"
+          status: pass
+        - cmd: "private-identifier grep over public repo"
+          status: pass_no_matches
+      spawned_tasks:
+        - T002
 
   - id: T002
     type: judge
     assignee: Judge
-    status: queued
+    status: done
     reasoning_hint: high
     objective: "Review T001 findings and choose the first largest safe Worker package for v0 dry-run automation."
     inputs:
@@ -119,28 +141,120 @@ tasks:
       - "verify."
       - "stop_if."
       - "Deferred follow-up tasks, if any."
-    receipt: null
+    receipt:
+      result: done
+      decision: approved
+      full_outcome_complete: false
+      summary: "Approved one coherent Worker package: implement the dependency-free v0 dry-run CLI and docs/wrapper updates."
+      exact_worker_objective: "Implement `scripts/aak.py` with `inspect`, `validate-adapter`, `render-workflows`, `check-xcode`, and `summarize-xcresult`; keep all behavior dry-run and public-safe; update docs and wrappers so the command surface is discoverable and verified."
+      allowed_files:
+        - "scripts/aak.py"
+        - "scripts/validate-adapter.py"
+        - "scripts/inspect-xcode-env.sh"
+        - "README.md"
+        - "docs/design.md"
+        - "docs/adapter-contract.md"
+        - "docs/privacy-safe-evidence.md"
+        - "templates/**"
+        - ".gitignore"
+        - "docs/goals/v0-dry-run-automation/state.yaml"
+        - "docs/goals/v0-dry-run-automation/notes/**"
+      verify:
+        - "python3 scripts/aak.py --help"
+        - "python3 scripts/aak.py validate-adapter templates/adapter.example.json"
+        - "python3 scripts/aak.py inspect --repo . --adapter templates/adapter.example.json --json"
+        - "rm -rf /tmp/aak-render && python3 scripts/aak.py render-workflows --adapter templates/adapter.example.json --output /tmp/aak-render --force && find /tmp/aak-render -type f | sort"
+        - "python3 scripts/aak.py check-xcode --json"
+        - "python3 scripts/aak.py summarize-xcresult /tmp/nonexistent.xcresult --json"
+        - "scripts/validate-adapter.py templates/adapter.example.json"
+        - "PYTHONPATH=/tmp/apple-agent-kit-pydeps python3 /Users/neonwatty/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py /Users/neonwatty/Desktop/apple-agent-kit"
+        - "private-identifier grep over public repo"
+      stop_if:
+        - "Need to inspect private app repos."
+        - "Need to touch physical devices, WDA, screenshots, installs, or self-hosted runners."
+        - "Need dependencies beyond the Python standard library."
+        - "Need files outside allowed_files."
+        - "Verification fails twice for the same reason."
 
   - id: T003
     type: worker
     assignee: Worker
-    status: queued
+    status: done
     reasoning_hint: medium
-    objective: "Implement the first v0 dry-run automation package selected by Judge."
-    allowed_files: []
-    verify: []
+    objective: "Implement `scripts/aak.py` with `inspect`, `validate-adapter`, `render-workflows`, `check-xcode`, and `summarize-xcresult`; keep all behavior dry-run and public-safe; update docs and wrappers so the command surface is discoverable and verified."
+    allowed_files:
+      - "scripts/aak.py"
+      - "scripts/validate-adapter.py"
+      - "scripts/inspect-xcode-env.sh"
+      - "README.md"
+      - "docs/design.md"
+      - "docs/adapter-contract.md"
+      - "docs/privacy-safe-evidence.md"
+      - "templates/**"
+      - ".gitignore"
+      - "docs/goals/v0-dry-run-automation/state.yaml"
+      - "docs/goals/v0-dry-run-automation/notes/**"
+    verify:
+      - "python3 scripts/aak.py --help"
+      - "python3 scripts/aak.py validate-adapter templates/adapter.example.json"
+      - "python3 scripts/aak.py inspect --repo . --adapter templates/adapter.example.json --json"
+      - "rm -rf /tmp/aak-render && python3 scripts/aak.py render-workflows --adapter templates/adapter.example.json --output /tmp/aak-render --force && find /tmp/aak-render -type f | sort"
+      - "python3 scripts/aak.py check-xcode --json"
+      - "python3 scripts/aak.py summarize-xcresult /tmp/nonexistent.xcresult --json"
+      - "scripts/validate-adapter.py templates/adapter.example.json"
+      - "PYTHONPATH=/tmp/apple-agent-kit-pydeps python3 /Users/neonwatty/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py /Users/neonwatty/Desktop/apple-agent-kit"
+      - "private-identifier grep over public repo"
     stop_if:
       - "Need files outside Judge-approved allowed_files."
       - "Need to inspect private app repos."
       - "Need to touch physical devices, WDA, screenshots, installs, or self-hosted runners."
+      - "Need dependencies beyond the Python standard library."
       - "CLI behavior or adapter schema is ambiguous."
       - "Verification fails twice for the same reason."
-    receipt: null
+    receipt:
+      result: done
+      changed_files:
+        - ".gitignore"
+        - "README.md"
+        - "docs/adapter-contract.md"
+        - "docs/design.md"
+        - "docs/privacy-safe-evidence.md"
+        - "scripts/aak.py"
+        - "scripts/inspect-xcode-env.sh"
+        - "scripts/validate-adapter.py"
+        - "docs/goals/v0-dry-run-automation/state.yaml"
+        - "docs/goals/v0-dry-run-automation/notes/T001-scout.md"
+      summary: "Added dependency-free `scripts/aak.py` with inspect, validate-adapter, render-workflows, check-xcode, and summarize-xcresult commands; updated wrappers and docs."
+      commands:
+        - cmd: "python3 scripts/aak.py --help"
+          status: pass
+        - cmd: "python3 scripts/aak.py validate-adapter templates/adapter.example.json"
+          status: pass
+        - cmd: "python3 scripts/aak.py inspect --repo . --adapter templates/adapter.example.json --json"
+          status: pass
+        - cmd: "rm -rf /tmp/aak-render && python3 scripts/aak.py render-workflows --adapter templates/adapter.example.json --output /tmp/aak-render --force && find /tmp/aak-render -type f | sort"
+          status: pass
+        - cmd: "python3 scripts/aak.py check-xcode --json"
+          status: pass
+        - cmd: "python3 scripts/aak.py summarize-xcresult /tmp/nonexistent.xcresult --json (expected exit 66)"
+          status: pass
+        - cmd: "PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile scripts/aak.py scripts/validate-adapter.py"
+          status: pass
+        - cmd: "scripts/validate-adapter.py templates/adapter.example.json"
+          status: pass
+        - cmd: "PYTHONPATH=/tmp/apple-agent-kit-pydeps python3 /Users/neonwatty/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py /Users/neonwatty/Desktop/apple-agent-kit"
+          status: pass
+        - cmd: "private-identifier grep over public repo"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      physical_device_actions: false
+      self_hosted_runner_actions: false
 
   - id: T004
     type: worker
     assignee: Worker
-    status: queued
+    status: blocked
     reasoning_hint: medium
     objective: "Add or update docs/templates/tests for the remaining v0 dry-run commands after T003, if the first package did not complete the full command surface."
     allowed_files: []
@@ -150,12 +264,15 @@ tasks:
       - "Need private adapter values."
       - "Need physical-device or self-hosted runner execution."
       - "Need files outside PM/Judge-approved allowed_files."
-    receipt: null
+    receipt:
+      result: blocked
+      reason: "not_required"
+      summary: "T003 completed the full v0 dry-run command surface, so this follow-up Worker is no longer needed for the current tranche."
 
   - id: T005
     type: judge
     assignee: Judge
-    status: queued
+    status: done
     reasoning_hint: high
     objective: "Assess readiness for a later private-adapter validation tranche without performing it."
     inputs:
@@ -171,12 +288,22 @@ tasks:
       - "readiness: ready | not_ready."
       - "Required approvals or private inputs for next tranche."
       - "Recommended next GoalBuddy goal or task."
-    receipt: null
+    receipt:
+      result: done
+      decision: approved
+      readiness: ready
+      full_outcome_complete: false
+      summary: "The public kit is ready for a later private-adapter dry-run validation tranche, but not for Mac Mini or iPhone execution without explicit adapter and target approval."
+      required_approvals_or_inputs:
+        - "Private adapter path or private repo-local `.apple-agent-kit.json`."
+        - "Explicit approval before dispatching self-hosted workflows."
+        - "Explicit approval before physical-device install, WDA, screenshots, or host-app automation."
+      recommended_next_goal: "Validate a private adapter with `aak inspect`, `aak render-workflows`, and repo-specific dry-runs; keep physical infrastructure checks as a separate approved tranche."
 
   - id: T999
     type: judge
     assignee: Judge
-    status: queued
+    status: done
     reasoning_hint: high
     objective: "Final audit: decide whether v0 dry-run automation satisfies the owner outcome for this tranche."
     inputs:
@@ -195,11 +322,54 @@ tasks:
       - "full_outcome_complete: true | false."
       - "Evidence mapped to the oracle."
       - "Missing evidence or next task if not complete."
-    receipt: null
+    receipt:
+      result: done
+      decision: complete
+      full_outcome_complete: true
+      summary: "The v0 dry-run automation tranche is complete: the public repo now has an executable dependency-free command surface for inspect, validate-adapter, render-workflows, check-xcode, and summarize-xcresult, with docs and wrappers updated."
+      evidence_mapped_to_oracle:
+        adapter_validation: "python3 scripts/aak.py validate-adapter templates/adapter.example.json; scripts/validate-adapter.py templates/adapter.example.json"
+        plugin_validation: "PYTHONPATH=/tmp/apple-agent-kit-pydeps python3 /Users/neonwatty/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py /Users/neonwatty/Desktop/apple-agent-kit"
+        cli_help_and_dry_runs: "python3 scripts/aak.py --help; inspect --json; check-xcode --json; summarize missing xcresult with expected exit 66"
+        workflow_rendering: "render-workflows created macos-ci.yml, ios-simulator-ci.yml, ios-physical-device.yml, and render-receipt.json in /tmp/aak-render"
+        public_private_boundary: "private-identifier grep over public repo returned no matches"
+      commands:
+        - cmd: "python3 scripts/aak.py --help"
+          status: pass
+        - cmd: "python3 scripts/aak.py validate-adapter templates/adapter.example.json"
+          status: pass
+        - cmd: "python3 scripts/aak.py inspect --repo . --adapter templates/adapter.example.json --json"
+          status: pass
+        - cmd: "python3 scripts/aak.py render-workflows --adapter templates/adapter.example.json --output /tmp/aak-render --force"
+          status: pass
+        - cmd: "python3 scripts/aak.py check-xcode --json"
+          status: pass
+        - cmd: "python3 scripts/aak.py summarize-xcresult /tmp/nonexistent.xcresult --json (expected exit 66)"
+          status: pass
+        - cmd: "PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile scripts/aak.py scripts/validate-adapter.py"
+          status: pass
+        - cmd: "PYTHONPATH=/tmp/apple-agent-kit-pydeps python3 /Users/neonwatty/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py /Users/neonwatty/Desktop/apple-agent-kit"
+          status: pass
+        - cmd: "node /Users/neonwatty/.codex/plugins/cache/goalbuddy/goalbuddy/0.3.9/skills/goalbuddy/scripts/check-goal-state.mjs docs/goals/v0-dry-run-automation/state.yaml"
+          status: pass
+        - cmd: "private-identifier grep over public repo"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      residual_risk: "Private adapter rendering and real Mac Mini/iPhone workflows remain intentionally untested until a separate approved private-adapter tranche."
 
 checks:
   dirty_fingerprint: unknown
   last_verification:
-    result: unknown
-    task: null
-    commands: []
+    result: pass
+    task: T003
+    commands:
+      - "python3 scripts/aak.py --help"
+      - "python3 scripts/aak.py validate-adapter templates/adapter.example.json"
+      - "python3 scripts/aak.py inspect --repo . --adapter templates/adapter.example.json --json"
+      - "python3 scripts/aak.py render-workflows --adapter templates/adapter.example.json --output /tmp/aak-render --force"
+      - "python3 scripts/aak.py check-xcode --json"
+      - "python3 scripts/aak.py summarize-xcresult /tmp/nonexistent.xcresult --json"
+      - "scripts/validate-adapter.py templates/adapter.example.json"
+      - "plugin validation"
+      - "private-identifier grep"
