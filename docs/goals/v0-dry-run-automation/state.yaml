@@ -1,0 +1,205 @@
+version: 2
+
+goal:
+  title: "Apple Agent Kit v0 Dry-Run Automation"
+  slug: "v0-dry-run-automation"
+  kind: existing_plan
+  tranche: "Complete the public v0 dry-run command surface and proof loop without touching private adapters, physical devices, or self-hosted runners."
+  status: active
+  oracle:
+    signal: "Adapter validation, plugin validation, CLI dry-run commands, workflow rendering checks, and private-identifier leakage grep all pass."
+    cadence: "after each Worker package and at final audit"
+    final_proof: "Final Judge or PM receipt records full_outcome_complete: true and lists the passing commands/direct inspections."
+  intake:
+    original_request: "Plan the next Apple Agent Kit work with GoalBuddy prep."
+    interpreted_outcome: "Prepare a GoalBuddy board to build v0 dry-run automation in the new public apple-agent-kit repo."
+    input_shape: existing_plan
+    audience: "Open-source Apple Agent Kit users and future private adapter maintainers."
+    authority: approved
+    proof_type: test
+    completion_proof: "A verified v0 dry-run command surface exists and public/private boundary checks pass."
+    likely_misfire: "Creating more docs/templates without a usable dry-run command surface, or leaking private adapter details into the public repo."
+    blind_spots_considered:
+      - "Codex plugin manifest validation."
+      - "Claude Code-compatible reuse without private repo names."
+      - "No physical-device, WDA, install, screenshot, or self-hosted runner side effects in this tranche."
+      - "Xcode availability can vary across machines, so Xcode checks must report capability rather than assume success."
+      - "Workflow rendering must preserve generic placeholders and avoid private identifiers."
+    existing_plan_facts:
+      - "Public repo: /Users/neonwatty/Desktop/apple-agent-kit."
+      - "Repository is public at https://github.com/neonwatty/apple-agent-kit."
+      - "Private repo-specific adapters stay outside this repo."
+      - "First useful milestone is v0 dry-run automation."
+      - "Candidate command surface: aak inspect, aak validate-adapter, aak render-workflows, aak check-xcode, aak summarize-xcresult."
+      - "Real Mac Mini and preview iPhone validation comes after dry-run proof and explicit approval."
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  exact_human_approval_can_terminal_wait: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+  goal_pressure_requires_oracle: true
+  no_completion_on_weak_proof: true
+  slice_policy:
+    max_consecutive_tiny_tasks: 2
+    prefer_vertical_slices: true
+    judge_picks_largest_safe_slice: true
+    worker_completes_whole_slice: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: installed
+
+visual_board:
+  selected: local
+  local:
+    status: live
+    url: "http://goalbuddy.localhost:41737/v0-dry-run-automation/"
+    command: "node /Users/neonwatty/.codex/plugins/cache/goalbuddy/goalbuddy/0.3.9/skills/goalbuddy/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/v0-dry-run-automation"
+
+active_task: T001
+
+tasks:
+  - id: T001
+    type: scout
+    assignee: Scout
+    status: active
+    reasoning_hint: medium
+    objective: "Map the current public scaffold, plugin constraints, verification commands, and the smallest useful v0 dry-run implementation path."
+    inputs:
+      - ".codex-plugin/plugin.json"
+      - "README.md"
+      - "docs/"
+      - "scripts/"
+      - "skills/"
+      - "templates/"
+      - "Goal oracle in docs/goals/v0-dry-run-automation/goal.md"
+    constraints:
+      - "Read-only."
+      - "Do not inspect private app repos during this task."
+      - "Do not edit implementation files."
+      - "Do not touch physical devices, WDA, screenshots, installs, or self-hosted runners."
+      - "Prefer concrete file-path evidence over generic advice."
+    expected_output:
+      - "Repo map and current scaffold strengths/gaps."
+      - "Recommended v0 CLI shape and dependency strategy."
+      - "Verification commands available now."
+      - "Risk list focused on public/private leakage and weak proof."
+      - "Candidate Worker package with likely allowed_files, verify commands, and stop conditions."
+    receipt: null
+
+  - id: T002
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Review T001 findings and choose the first largest safe Worker package for v0 dry-run automation."
+    inputs:
+      - "T001 receipt or note."
+      - "Goal oracle."
+      - "Current git status."
+    constraints:
+      - "Do not implement."
+      - "Keep physical-device and private-adapter work out of scope."
+      - "Pick a Worker slice that produces working behavior, not only prose."
+      - "Set explicit allowed_files, verify commands, and stop_if conditions."
+    expected_output:
+      - "Decision: approved | revise | blocked."
+      - "Exact Worker objective."
+      - "allowed_files."
+      - "verify."
+      - "stop_if."
+      - "Deferred follow-up tasks, if any."
+    receipt: null
+
+  - id: T003
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: medium
+    objective: "Implement the first v0 dry-run automation package selected by Judge."
+    allowed_files: []
+    verify: []
+    stop_if:
+      - "Need files outside Judge-approved allowed_files."
+      - "Need to inspect private app repos."
+      - "Need to touch physical devices, WDA, screenshots, installs, or self-hosted runners."
+      - "CLI behavior or adapter schema is ambiguous."
+      - "Verification fails twice for the same reason."
+    receipt: null
+
+  - id: T004
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: medium
+    objective: "Add or update docs/templates/tests for the remaining v0 dry-run commands after T003, if the first package did not complete the full command surface."
+    allowed_files: []
+    verify: []
+    stop_if:
+      - "T003 completed the full v0 command surface and T004 is no longer required."
+      - "Need private adapter values."
+      - "Need physical-device or self-hosted runner execution."
+      - "Need files outside PM/Judge-approved allowed_files."
+    receipt: null
+
+  - id: T005
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Assess readiness for a later private-adapter validation tranche without performing it."
+    inputs:
+      - "Done Worker receipts."
+      - "Public/private leakage grep result."
+      - "Current adapter contract."
+    constraints:
+      - "Read-only."
+      - "Do not inspect private repos."
+      - "Do not create private adapters."
+      - "Do not run on Mac Mini or preview iPhone."
+    expected_output:
+      - "readiness: ready | not_ready."
+      - "Required approvals or private inputs for next tranche."
+      - "Recommended next GoalBuddy goal or task."
+    receipt: null
+
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Final audit: decide whether v0 dry-run automation satisfies the owner outcome for this tranche."
+    inputs:
+      - "All done task receipts."
+      - "Last verification commands."
+      - "Current dirty diff."
+      - "Goal oracle."
+    constraints:
+      - "Do not implement."
+      - "Reject completion if required Worker work remains queued or active."
+      - "Reject completion if verification is stale, weak, or missing."
+      - "Reject completion if private identifiers appear in the public repo."
+      - "Reject completion if the command surface is only documented but not executable."
+    expected_output:
+      - "complete | not_complete."
+      - "full_outcome_complete: true | false."
+      - "Evidence mapped to the oracle."
+      - "Missing evidence or next task if not complete."
+    receipt: null
+
+checks:
+  dirty_fingerprint: unknown
+  last_verification:
+    result: unknown
+    task: null
+    commands: []
