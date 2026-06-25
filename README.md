@@ -41,7 +41,7 @@ The rendered workflow set includes two device-free self-hosted Mac templates:
 
 Bind both with private `ci.macosRunnerLabels`; keep physical iPhone workflows behind a separate approval gate.
 
-See [Adopting the macOS CI Eligibility Lane](docs/adopting-macos-ci-eligibility.md) and the [Private Adapter Rollout Checklist](docs/private-adapter-rollout-checklist.md) for a repeatable public/private adoption path.
+See [Adopting the macOS CI Eligibility Lane](docs/adopting-macos-ci-eligibility.md), [Self-Hosted Runner Scope and Onboarding](docs/self-hosted-runner-scope-onboarding.md), and the [Private Adapter Rollout Checklist](docs/private-adapter-rollout-checklist.md) for a repeatable public/private adoption path.
 
 ## Private Adapters
 
