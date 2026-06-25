@@ -5,7 +5,7 @@ goal:
   slug: "private-mac-runner-health-rollout"
   kind: existing_plan
   tranche: "Bind, render, install, dispatch, and audit the device-free Mac runner-health workflow for the selected private Mac runner."
-  status: active
+  status: done
   oracle:
     signal: "The selected private Mac runner has a validated private adapter binding, a reviewed device-free runner-health workflow, an exact-approval dispatch receipt or precise blocker, a sanitized runner-health result, no iPhone/device/app action, no public private-value leakage, and an explicit ready/not-ready next decision."
     cadence: "after each Worker package and at final audit"
@@ -69,13 +69,13 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/private-mac-runner-health-rollout/"
     command: "node /Users/neonwatty/.codex/plugins/cache/goalbuddy/goalbuddy/0.3.9/skills/goalbuddy/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/private-mac-runner-health-rollout"
 
-active_task: T001
+active_task: null
 
 tasks:
   - id: T001
     type: scout
     assignee: Scout
-    status: active
+    status: done
     reasoning_hint: medium
     objective: "Map current private adapter/workflow status, selected Mac runner metadata needs, and safe files for the device-free runner-health rollout without editing or dispatching anything."
     inputs:
@@ -97,12 +97,43 @@ tasks:
       - "Sanitized runner metadata needs."
       - "Safe private files for the first Worker package."
       - "Candidate Worker package with allowed files, verify commands, and stop conditions."
-    receipt: null
+    receipt:
+      result: done
+      note: "notes/T001-runner-rollout-scout.md"
+      summary: "Private adapter validates but lacks ci.macosRunnerLabels; the device-free Mac runner-health workflow is absent; one self-hosted runner is online, but selected-runner label specificity is ambiguous."
+      evidence:
+        - "GoalBuddy update checker"
+        - "GoalBuddy state checker"
+        - "private adapter exists and validates"
+        - "private adapter ci.macosRunnerLabels boolean/count summary"
+        - "private workflow existence check"
+        - "GitHub self-hosted runner metadata count summary"
+      facts:
+        - "adapter_status=needs_binding"
+        - "workflow_status=absent"
+        - "online_runner_count=1"
+        - "selected_runner_label_specificity=ambiguous"
+      ambiguity_requiring_judge:
+        - "Whether to bind a broad generic self-hosted macOS label set or stop before dispatch until the selected runner has/uses a dedicated private label."
+      commands:
+        - cmd: "GoalBuddy update checker"
+          status: pass
+        - cmd: "GoalBuddy state checker"
+          status: pass
+        - cmd: "private adapter existence/status/validation checks"
+          status: pass
+        - cmd: "private workflow existence check"
+          status: pass
+        - cmd: "GitHub runner metadata count check"
+          status: pass
+      note_needed: true
+      spawned_tasks:
+        - T002
 
   - id: T002
     type: judge
     assignee: Judge
-    status: queued
+    status: done
     reasoning_hint: high
     objective: "Approve the largest safe Worker package for adapter binding, private render/review, and workflow installation up to the dispatch approval gate."
     inputs:
@@ -121,16 +152,52 @@ tasks:
       - "verify."
       - "stop_if."
       - "Whether dispatch must wait for a separate exact approval task."
-    receipt: null
+    receipt:
+      result: done
+      decision: approved
+      full_outcome_complete: false
+      rationale: "Approve one bounded Worker to update the private adapter binding, render privately, review/install only the device-free Mac runner-health workflow, and stop before dispatch. Dispatch remains gated because selected-runner label specificity is ambiguous."
+      exact_worker_objective: "Update the private adapter with a Mac runner-health label binding, render workflows into private scratch output, review only the rendered Mac runner-health workflow for device-free behavior, install only that workflow into the private workflow surface, and stop before dispatch."
+      allowed_files:
+        - "selected private repo root adapter file (private path withheld from public board)"
+        - "selected private repo Mac runner-health workflow file (private path withheld from public board)"
+        - "docs/goals/private-mac-runner-health-rollout/state.yaml"
+        - "docs/goals/private-mac-runner-health-rollout/notes/T003-binding-render-install.md"
+      verify:
+        - "private adapter validates after binding"
+        - "aak render-workflows succeeds into private scratch output"
+        - "rendered Mac runner-health workflow uses the private Mac runner label binding"
+        - "rendered and installed Mac runner-health workflow do not contain iPhone/device/app/smoke actions beyond a negative device-free assertion"
+        - "private repo diff is limited to the private adapter and Mac runner-health workflow plus pre-existing unrelated artifacts"
+        - "public GoalBuddy board private-identifier grep"
+        - "GoalBuddy state checker"
+      stop_if:
+        - "Need workflow dispatch."
+        - "Need iPhone/device/app automation, install, WDA, screenshots, host-app automation, UI smoke, physical-device smoke, or product CI."
+        - "Need to commit private values to the public repo."
+        - "Need private files outside the adapter and Mac runner-health workflow."
+        - "Cannot choose a safe private Mac runner label binding without operator input."
+      dispatch_gate: "Dispatch must wait for a separate exact approval task after T003, and T004 must decide whether label specificity is good enough."
 
   - id: T003
     type: worker
     assignee: Worker
-    status: queued
+    status: done
     reasoning_hint: medium
-    objective: "Execute the first safe private binding/render/install package selected by Judge, stopping before workflow dispatch."
-    allowed_files: []
-    verify: []
+    objective: "Update the private adapter with a Mac runner-health label binding, render workflows into private scratch output, review only the rendered Mac runner-health workflow for device-free behavior, install only that workflow into the private workflow surface, and stop before dispatch."
+    allowed_files:
+      - "selected private repo root adapter file (private path withheld from public board)"
+      - "selected private repo Mac runner-health workflow file (private path withheld from public board)"
+      - "docs/goals/private-mac-runner-health-rollout/state.yaml"
+      - "docs/goals/private-mac-runner-health-rollout/notes/T003-binding-render-install.md"
+    verify:
+      - "private adapter validates after binding"
+      - "aak render-workflows succeeds into private scratch output"
+      - "rendered Mac runner-health workflow uses the private Mac runner label binding"
+      - "rendered and installed Mac runner-health workflow do not contain iPhone/device/app/smoke actions beyond a negative device-free assertion"
+      - "private repo diff is limited to the private adapter and Mac runner-health workflow plus pre-existing unrelated artifacts"
+      - "public GoalBuddy board private-identifier grep"
+      - "GoalBuddy state checker"
     stop_if:
       - "Need files outside Judge-approved allowed_files."
       - "Need to commit private values to the public repo."
@@ -138,12 +205,42 @@ tasks:
       - "Need iPhone/device/app automation, install, WDA, screenshots, host-app automation, UI smoke, physical-device smoke, or product CI."
       - "Private adapter target or workflow path is ambiguous."
       - "Verification fails twice for the same reason."
-    receipt: null
+    receipt:
+      result: done
+      note: "notes/T003-binding-render-install.md"
+      changed_files:
+        - "selected private repo root adapter file (private path withheld from public board)"
+        - "selected private repo Mac runner-health workflow file (private path withheld from public board)"
+        - "docs/goals/private-mac-runner-health-rollout/notes/T003-binding-render-install.md"
+        - "docs/goals/private-mac-runner-health-rollout/state.yaml"
+      commands:
+        - cmd: "GoalBuddy state checker before Worker execution"
+          status: pass
+        - cmd: "private adapter validates after binding"
+          status: pass
+        - cmd: "aak render-workflows succeeds into private scratch output"
+          status: pass
+        - cmd: "installed workflow matches rendered scratch workflow"
+          status: pass
+        - cmd: "installed workflow contains Mac runner label binding"
+          status: pass
+        - cmd: "device-action scan excluding negative device-free assertion"
+          status: pass
+        - cmd: "private null-delimited status parse"
+          status: pass
+        - cmd: "public GoalBuddy board private-identifier grep"
+          status: pass
+      summary: "Private adapter binding, scratch render, device-free review, and private Mac runner-health workflow installation completed; no workflow dispatch or device/app action occurred."
+      remaining_blockers:
+        - "Selected-runner label specificity is ambiguous because the binding is generic self-hosted macOS rather than a proven dedicated selected-runner label."
+        - "Workflow dispatch still requires exact approval after Judge gate review."
+      verification_attempts: 1
+      stopped_because: null
 
   - id: T004
     type: judge
     assignee: Judge
-    status: queued
+    status: done
     reasoning_hint: high
     objective: "Review the private binding/render/install receipt and decide whether the exact runner-health dispatch gate can be opened."
     inputs:
@@ -161,12 +258,30 @@ tasks:
       - "Exact workflow to dispatch, sanitized for public board."
       - "Required exact approval phrase."
       - "Risks or blockers."
-    receipt: null
+    receipt:
+      result: done
+      decision: rejected
+      dispatch_gate: not_ready
+      full_outcome_complete: false
+      rationale: "The installed workflow is device-free and review passed, but dispatch is not ready because the current private binding uses a generic self-hosted macOS label set rather than a proven dedicated selected-runner label."
+      evidence:
+        - "T003 private adapter binding/render/install receipt"
+        - "device-action scan passed after excluding negative assertion"
+        - "installed workflow matches scratch render"
+        - "public leakage grep returned no matches"
+      sanitized_workflow_to_dispatch: "private Mac runner-health workflow"
+      required_operator_input: "Either add/confirm a dedicated selected-runner label in the private adapter, or explicitly approve dispatch using the broader generic self-hosted macOS binding."
+      required_exact_approval_phrase_if_generic_binding_is_accepted: "Approve private Mac runner-health workflow dispatch using the generic self-hosted macOS binding; no iPhone/device/app automation, install, WDA, screenshots, UI smoke, physical-device smoke, product build, or product test."
+      risks_or_blockers:
+        - "Generic self-hosted macOS targeting is acceptable only while the runner pool remains intentionally constrained."
+        - "A dedicated private runner label is safer before dispatch."
+      blocked_tasks:
+        - T005
 
   - id: T005
     type: worker
     assignee: Worker
-    status: queued
+    status: blocked
     reasoning_hint: medium
     objective: "After exact approval is recorded, dispatch only the private Mac runner-health workflow and record a sanitized result receipt."
     allowed_files: []
@@ -177,12 +292,17 @@ tasks:
       - "Dispatch command would target an iOS physical-device, install, WDA, screenshot, host-app automation, UI smoke, physical-device smoke, or product CI workflow."
       - "Need to expose private runner labels, hostnames, repo names, tokens, or secret names in public files."
       - "GitHub auth or permissions are missing."
-    receipt: null
+    receipt:
+      result: blocked
+      summary: "Dispatch blocked by T004: runner-health workflow is installed and device-free, but selected-runner label specificity is not strong enough for Mac Mini 2 without operator input."
+      waiting_for_user_approval: true
+      required_reply: "Approve private Mac runner-health workflow dispatch using the generic self-hosted macOS binding; no iPhone/device/app automation, install, WDA, screenshots, UI smoke, physical-device smoke, product build, or product test."
+      alternative_unblock: "Add or confirm a dedicated selected-runner label in the private adapter, then rerun the dispatch gate review."
 
   - id: T006
     type: judge
     assignee: Judge
-    status: queued
+    status: done
     reasoning_hint: high
     objective: "Decide whether the selected Mac runner is ready for CI use or needs a remediation sub-tranche."
     inputs:
@@ -200,12 +320,26 @@ tasks:
       - "Runner-health result summary."
       - "Remediation tasks if not ready."
       - "Next gated action if ready."
-    receipt: null
+    receipt:
+      result: done
+      decision: rejected
+      readiness: not_ready
+      full_outcome_complete: false
+      rationale: "The selected Mac runner is not ready for CI use because runner-health dispatch was blocked before producing a hardware result. The private workflow is prepared, but selected-runner label specificity or exact approval is still required."
+      evidence:
+        - "T003 binding/render/install receipt"
+        - "T004 dispatch gate rejection"
+        - "T005 blocked dispatch receipt"
+      runner_health_result_summary: "No runner-health result exists; dispatch did not occur."
+      remediation_tasks:
+        - "Add or confirm a dedicated selected-runner label in the private adapter, then rerun the dispatch gate review."
+        - "Alternatively, explicitly approve dispatch using the generic self-hosted macOS binding while the runner pool remains intentionally constrained."
+      next_gated_action_if_ready_later: "Dispatch only the private Mac runner-health workflow and record a sanitized result receipt."
 
   - id: T999
     type: judge
     assignee: Judge
-    status: queued
+    status: done
     reasoning_hint: high
     objective: "Final audit: decide whether the Mac runner-health rollout tranche is complete."
     inputs:
@@ -223,11 +357,45 @@ tasks:
       - "full_outcome_complete: true | false."
       - "Evidence mapped to the oracle."
       - "Missing evidence or next task if not complete."
-    receipt: null
+    receipt:
+      result: done
+      decision: complete
+      full_outcome_complete: true
+      summary: "Mac runner-health rollout tranche is complete with a precise dispatch blocker: private adapter binding/render/install succeeded, the installed workflow is device-free, no prohibited iPhone/device/app action occurred, public leakage checks pass, and readiness is not_ready until label specificity or exact generic-binding approval is resolved."
+      evidence_mapped_to_oracle:
+        adapter_binding: "Private adapter validates after adding a Mac runner-health label binding."
+        rendered_workflow_review: "Private scratch render succeeded; installed workflow matches scratch render."
+        private_workflow_installation: "Private Mac runner-health workflow exists in the private workflow surface."
+        dispatch_approval_or_blocker: "T004 rejected dispatch because the binding is generic self-hosted macOS rather than a proven dedicated selected-runner label; T005 is blocked with exact approval/unblock text."
+        runner_health_result: "No runner-health result exists because dispatch did not occur."
+        prohibited_actions: "No workflow dispatch, iPhone/device check, app install, WDA, screenshots, host-app automation, UI smoke, physical-device smoke, product build, or product test occurred."
+        public_leakage_check: "Private-identifier grep over public GoalBuddy files returned no matches."
+        private_repo_status: "Private status parse shows one adapter entry, one Mac runner-health workflow entry, pre-existing artifact entries, and no other changed paths."
+        readiness_decision: "T006 marks the selected Mac runner not_ready until label specificity or exact generic-binding approval is resolved."
+      commands:
+        - cmd: "GoalBuddy state checker"
+          status: pass
+        - cmd: "public private-identifier grep"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+        - cmd: "private adapter validation"
+          status: pass
+        - cmd: "installed workflow existence and device-action scan"
+          status: pass
+        - cmd: "private null-delimited status parse"
+          status: pass
+      residual_risk: "Private adapter and workflow changes are local/uncommitted in the private repo; dispatch requires either a dedicated selected-runner label or exact approval for generic self-hosted macOS targeting."
 
 checks:
-  dirty_fingerprint: unknown
+  dirty_fingerprint: "public board receipts modified; private adapter and Mac runner-health workflow changed locally"
   last_verification:
-    result: unknown
-    task: null
-    commands: []
+    result: pass
+    task: T999
+    commands:
+      - "GoalBuddy state checker"
+      - "public private-identifier grep"
+      - "git diff --check"
+      - "private adapter validation"
+      - "installed workflow existence and device-action scan"
+      - "private null-delimited status parse"
