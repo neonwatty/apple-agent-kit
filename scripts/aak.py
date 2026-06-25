@@ -245,7 +245,7 @@ def render_text(template_name: str, text: str, adapter: dict[str, Any]) -> str:
     if template_name == "ios-physical-device.yml":
         label_text = "[" + ", ".join(physical_labels) + "]"
         text = re.sub(r"runs-on: \[[^\n]+\]", f"runs-on: {label_text}", text)
-    if template_name == "macos-runner-health.yml":
+    if template_name in {"macos-runner-health.yml", "macos-ci-eligibility.yml"}:
         label_text = "[" + ", ".join(macos_runner_labels) + "]"
         text = re.sub(r"runs-on: \[[^\n]+\]", f"runs-on: {label_text}", text)
     return text
