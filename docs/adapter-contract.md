@@ -29,6 +29,7 @@ The recommended file name is `.apple-agent-kit.json` for machine-readable use. Y
   },
   "ci": {
     "macosRunner": "macos-15",
+    "macosRunnerLabels": ["self-hosted", "macOS", "apple-agent-kit"],
     "physicalRunnerLabels": ["self-hosted", "macOS", "ios-physical"]
   },
   "privacy": {
@@ -62,3 +63,9 @@ python3 scripts/aak.py render-workflows --adapter .apple-agent-kit.json --output
 ```
 
 Review rendered workflows before copying them into a private repository.
+
+## CI Runner Fields
+
+- `ci.macosRunner` is for hosted or generic macOS CI templates that use a single `runs-on` value.
+- `ci.macosRunnerLabels` is for self-hosted Mac runner-health workflows that use label arrays.
+- `ci.physicalRunnerLabels` is for physical iOS workflows and should stay separate from device-free Mac runner health checks.

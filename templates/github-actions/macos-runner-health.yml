@@ -1,0 +1,41 @@
+name: macOS Runner Health
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-runner-health
+  cancel-in-progress: false
+
+jobs:
+  runner-health:
+    runs-on: [self-hosted, macOS, apple-agent-kit]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Host summary
+        run: |
+          set -euo pipefail
+          sw_vers
+          uname -a
+          whoami
+      - name: Xcode summary
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun simctl list runtimes available
+      - name: Process safety summary
+        run: |
+          set -euo pipefail
+          ps -axo comm= | sort | uniq -c | egrep 'Xcode|Simulator|xcodebuild|CoreSimulator|WebDriverAgent' || true
+      - name: Disk summary
+        run: |
+          set -euo pipefail
+          df -h .
+      - name: Device-free assertion
+        run: |
+          set -euo pipefail
+          echo "No device install, WDA, screenshots, app launch, UI smoke, or physical-device smoke is run by this workflow."

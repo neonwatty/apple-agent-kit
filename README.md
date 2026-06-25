@@ -34,6 +34,8 @@ python3 scripts/aak.py summarize-xcresult path/to/TestResults.xcresult --json
 
 These commands do not install apps, boot simulators, start WDA, launch host apps, dispatch CI workflows, or touch physical devices.
 
+The rendered workflow set includes a device-free `macos-runner-health.yml` template for self-hosted Mac runner hardware checks. Bind it with private `ci.macosRunnerLabels`; keep physical iPhone workflows behind a separate approval gate.
+
 ## Private Adapters
 
 Private adapters provide concrete values for a repo:

@@ -231,6 +231,9 @@ def command_inspect(args: argparse.Namespace) -> int:
 def render_text(template_name: str, text: str, adapter: dict[str, Any]) -> str:
     ci = adapter.get("ci") or {}
     macos_runner = ci.get("macosRunner") or "macos-15"
+    macos_runner_labels = ci.get("macosRunnerLabels") or ["self-hosted", "macOS", "apple-agent-kit"]
+    if not isinstance(macos_runner_labels, list) or not all(isinstance(item, str) for item in macos_runner_labels):
+        macos_runner_labels = ["self-hosted", "macOS", "apple-agent-kit"]
     physical_labels = ci.get("physicalRunnerLabels") or ["self-hosted", "macOS", "ios-physical"]
     if not isinstance(physical_labels, list) or not all(isinstance(item, str) for item in physical_labels):
         physical_labels = ["self-hosted", "macOS", "ios-physical"]
@@ -241,6 +244,9 @@ def render_text(template_name: str, text: str, adapter: dict[str, Any]) -> str:
         text = text.replace("runs-on: macos-15", f"runs-on: {macos_runner}")
     if template_name == "ios-physical-device.yml":
         label_text = "[" + ", ".join(physical_labels) + "]"
+        text = re.sub(r"runs-on: \[[^\n]+\]", f"runs-on: {label_text}", text)
+    if template_name == "macos-runner-health.yml":
+        label_text = "[" + ", ".join(macos_runner_labels) + "]"
         text = re.sub(r"runs-on: \[[^\n]+\]", f"runs-on: {label_text}", text)
     return text
 

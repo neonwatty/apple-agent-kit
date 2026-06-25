@@ -20,6 +20,7 @@
   },
   "ci": {
     "macosRunner": "macos-15",
+    "macosRunnerLabels": ["self-hosted", "macOS", "apple-agent-kit"],
     "physicalRunnerLabels": ["self-hosted", "macOS", "ios-physical"]
   },
   "privacy": {

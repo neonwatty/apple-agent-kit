@@ -23,6 +23,8 @@ The v0 command entrypoint is `scripts/aak.py`. It is intentionally dependency-fr
 - `check-xcode`
 - `summarize-xcresult`
 
+The device-free self-hosted Mac runner-health template renders from `ci.macosRunnerLabels`. Keep this separate from physical iOS runner labels so a Mac hardware check does not imply install, WDA, screenshots, app launch, UI smoke, or physical-device smoke.
+
 ## Initial Skill Set
 
 - `apple-agent-intake`: inspect an Apple repo and choose relevant automation tracks.
@@ -62,6 +64,6 @@ The expected private validation path is:
 1. Dry run against a sample repo.
 2. macOS CI smoke on a sample Mac app.
 3. iOS simulator smoke on a sample iOS app.
-4. Self-hosted Mac runner preflight on a LAN Mac Mini.
-5. Physical iPhone smoke on a preview device.
+4. Self-hosted Mac runner preflight on a LAN Mac Mini, with no physical-device actions.
+5. Physical iPhone smoke on a preview device, only after separate approval.
 6. Audit generated receipts for usefulness and leakage.
