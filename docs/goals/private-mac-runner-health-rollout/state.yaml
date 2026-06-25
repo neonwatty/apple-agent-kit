@@ -1,0 +1,233 @@
+version: 2
+
+goal:
+  title: "Private Mac Runner Health Rollout"
+  slug: "private-mac-runner-health-rollout"
+  kind: existing_plan
+  tranche: "Bind, render, install, dispatch, and audit the device-free Mac runner-health workflow for the selected private Mac runner."
+  status: active
+  oracle:
+    signal: "The selected private Mac runner has a validated private adapter binding, a reviewed device-free runner-health workflow, an exact-approval dispatch receipt or precise blocker, a sanitized runner-health result, no iPhone/device/app action, no public private-value leakage, and an explicit ready/not-ready next decision."
+    cadence: "after each Worker package and at final audit"
+    final_proof: "Final Judge or PM receipt records full_outcome_complete: true and lists adapter binding, rendered workflow review, private workflow installation, dispatch approval/result or blocker, leakage check, and ready/not-ready decision."
+  intake:
+    original_request: "Make a detailed GoalBuddy prep board for Mac Mini 2 hardware plans after parking the preview iPhone."
+    interpreted_outcome: "Prepare and execute a GoalBuddy-controlled rollout tranche for the private, device-free Mac runner-health workflow."
+    input_shape: existing_plan
+    audience: "Apple Agent Kit maintainers and private adapter maintainers."
+    authority: approved_for_prep
+    proof_type: test
+    completion_proof: "Private adapter binding exists or is explicitly blocked; private runner-health workflow is rendered/reviewed/installed or blocked; exact approval is obtained before dispatch; the runner-health result is recorded; no iPhone/device/app actions occur; next readiness decision is explicit."
+    likely_misfire: "Reusing an iOS physical-device runner-health workflow, touching the parked preview iPhone, dispatching without exact approval, leaking private runner labels, or treating render success as hardware readiness."
+    blind_spots_considered:
+      - "Whether private adapter changes should be committed or parked."
+      - "Whether workflow installation should happen on a private branch."
+      - "Which private workflow file path should receive the rendered Mac runner-health workflow."
+      - "How to confirm the workflow is device-free before dispatch."
+      - "How to sanitize logs and host evidence."
+      - "What remediation path to take if the runner-health workflow fails."
+    existing_plan_facts:
+      - "Preview iPhone is parked for this tranche."
+      - "Use the public device-free macOS runner-health template."
+      - "Bind private ci.macosRunnerLabels for the selected Mac runner."
+      - "Render workflows privately and review only the Mac runner-health workflow."
+      - "Install only the Mac runner-health workflow into the private repo."
+      - "Dispatch only after exact approval."
+      - "Record a sanitized runner-health receipt."
+      - "Decide whether the selected Mac runner is ready for CI use or needs remediation."
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  exact_human_approval_can_terminal_wait: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+  goal_pressure_requires_oracle: true
+  no_completion_on_weak_proof: true
+  slice_policy:
+    max_consecutive_tiny_tasks: 2
+    prefer_vertical_slices: true
+    judge_picks_largest_safe_slice: true
+    worker_completes_whole_slice: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: installed
+
+visual_board:
+  selected: local
+  local:
+    status: live
+    url: "http://goalbuddy.localhost:41737/private-mac-runner-health-rollout/"
+    command: "node /Users/neonwatty/.codex/plugins/cache/goalbuddy/goalbuddy/0.3.9/skills/goalbuddy/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/private-mac-runner-health-rollout"
+
+active_task: T001
+
+tasks:
+  - id: T001
+    type: scout
+    assignee: Scout
+    status: active
+    reasoning_hint: medium
+    objective: "Map current private adapter/workflow status, selected Mac runner metadata needs, and safe files for the device-free runner-health rollout without editing or dispatching anything."
+    inputs:
+      - "Goal charter."
+      - "Public Mac runner-health template and adapter contract."
+      - "Private repo status, read-only."
+      - "Private adapter status, read-only."
+      - "Private workflow surface, read-only."
+    constraints:
+      - "Read-only."
+      - "Do not edit private adapter or workflows."
+      - "Do not dispatch workflows."
+      - "Do not touch the parked preview iPhone."
+      - "Do not install apps, start WDA, take screenshots, launch host apps, run UI smoke, run physical-device smoke, or run product CI."
+      - "Do not print private repo names, hostnames, runner names, runner labels, bundle IDs, device IDs, signing teams, tokens, or secret names in public committed notes."
+    expected_output:
+      - "Private adapter status: has macOS runner binding | needs binding | ambiguous."
+      - "Private workflow status: installed | absent | conflicting | ambiguous."
+      - "Sanitized runner metadata needs."
+      - "Safe private files for the first Worker package."
+      - "Candidate Worker package with allowed files, verify commands, and stop conditions."
+    receipt: null
+
+  - id: T002
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Approve the largest safe Worker package for adapter binding, private render/review, and workflow installation up to the dispatch approval gate."
+    inputs:
+      - "T001 receipt or note."
+      - "Goal oracle."
+      - "Current public and private repo status."
+    constraints:
+      - "Do not implement."
+      - "Reject any package that dispatches workflows or touches iPhone/device/app automation."
+      - "Keep private details out of public committed files."
+      - "Set exact allowed_files, verify commands, and stop_if conditions."
+    expected_output:
+      - "Decision: approved | revise | blocked."
+      - "Exact Worker objective."
+      - "allowed_files."
+      - "verify."
+      - "stop_if."
+      - "Whether dispatch must wait for a separate exact approval task."
+    receipt: null
+
+  - id: T003
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: medium
+    objective: "Execute the first safe private binding/render/install package selected by Judge, stopping before workflow dispatch."
+    allowed_files: []
+    verify: []
+    stop_if:
+      - "Need files outside Judge-approved allowed_files."
+      - "Need to commit private values to the public repo."
+      - "Need workflow dispatch."
+      - "Need iPhone/device/app automation, install, WDA, screenshots, host-app automation, UI smoke, physical-device smoke, or product CI."
+      - "Private adapter target or workflow path is ambiguous."
+      - "Verification fails twice for the same reason."
+    receipt: null
+
+  - id: T004
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Review the private binding/render/install receipt and decide whether the exact runner-health dispatch gate can be opened."
+    inputs:
+      - "T003 receipt."
+      - "Rendered private workflow review."
+      - "Private repo diff/status summary."
+      - "Public leakage check."
+    constraints:
+      - "Read-only."
+      - "Do not dispatch workflows."
+      - "Reject dispatch if the rendered workflow contains device/app/smoke actions."
+      - "Keep private details out of public committed files."
+    expected_output:
+      - "dispatch_gate: ready | not_ready."
+      - "Exact workflow to dispatch, sanitized for public board."
+      - "Required exact approval phrase."
+      - "Risks or blockers."
+    receipt: null
+
+  - id: T005
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: medium
+    objective: "After exact approval is recorded, dispatch only the private Mac runner-health workflow and record a sanitized result receipt."
+    allowed_files: []
+    verify: []
+    stop_if:
+      - "Exact approval phrase is missing or does not match the Judge-required approval."
+      - "The workflow to dispatch is not the private Mac runner-health workflow."
+      - "Dispatch command would target an iOS physical-device, install, WDA, screenshot, host-app automation, UI smoke, physical-device smoke, or product CI workflow."
+      - "Need to expose private runner labels, hostnames, repo names, tokens, or secret names in public files."
+      - "GitHub auth or permissions are missing."
+    receipt: null
+
+  - id: T006
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Decide whether the selected Mac runner is ready for CI use or needs a remediation sub-tranche."
+    inputs:
+      - "T005 dispatch/result receipt or blocker."
+      - "Sanitized runner-health logs or receipt."
+      - "Private repo status."
+      - "Public leakage check."
+    constraints:
+      - "Read-only."
+      - "Do not run additional workflows."
+      - "Do not touch iPhone/device/app automation."
+      - "Keep private details out of public committed files."
+    expected_output:
+      - "readiness: ready | not_ready | blocked."
+      - "Runner-health result summary."
+      - "Remediation tasks if not ready."
+      - "Next gated action if ready."
+    receipt: null
+
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Final audit: decide whether the Mac runner-health rollout tranche is complete."
+    inputs:
+      - "All done task receipts."
+      - "Last verification commands."
+      - "Current dirty diff in public and private repos."
+      - "Goal oracle."
+    constraints:
+      - "Do not implement."
+      - "Reject completion if required Worker work remains queued or active."
+      - "Reject completion if adapter binding, workflow review/install, dispatch approval/result or blocker, leakage proof, or readiness decision is missing."
+      - "Reject completion if iPhone/device/app automation occurred during this tranche."
+    expected_output:
+      - "complete | not_complete."
+      - "full_outcome_complete: true | false."
+      - "Evidence mapped to the oracle."
+      - "Missing evidence or next task if not complete."
+    receipt: null
+
+checks:
+  dirty_fingerprint: unknown
+  last_verification:
+    result: unknown
+    task: null
+    commands: []
