@@ -6,7 +6,7 @@ Use this checklist when applying Apple Agent Kit to a private Apple app repo. Ke
 
 - Repo:
 - Platform: macOS / iOS / both
-- Lane: runner health / macOS CI eligibility / simulator CI / physical device
+- Lane: runner health / macOS CI eligibility / iOS CI eligibility / simulator CI / physical device
 - Approved hardware binding:
 - Explicit exclusions:
 
@@ -73,4 +73,3 @@ Do not promote the lane to heavier CI until:
 - The safety boundary was verified with a command or direct inspection.
 - Any hardware-specific labels are documented privately.
 - The final handoff names what was not run.
-

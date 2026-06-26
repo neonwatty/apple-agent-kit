@@ -34,14 +34,15 @@ python3 scripts/aak.py summarize-xcresult path/to/TestResults.xcresult --json
 
 These commands do not install apps, boot simulators, start WDA, launch host apps, dispatch CI workflows, or touch physical devices.
 
-The rendered workflow set includes two device-free self-hosted Mac templates:
+The rendered workflow set includes device-free eligibility templates:
 
 - `macos-runner-health.yml` checks a specific Mac runner on demand.
 - `macos-ci-eligibility.yml` validates a private adapter, renders reusable workflows into scratch space, and checks Xcode readiness without building or testing the product.
+- `ios-ci-eligibility.yml` validates a private iOS adapter, renders reusable workflows into scratch space, checks Xcode readiness, and inventories simulators without building, testing, booting, installing, launching, screenshotting, or touching physical devices.
 
-Bind both with private `ci.macosRunnerLabels`; keep physical iPhone workflows behind a separate approval gate.
+Bind the self-hosted Mac lanes with private `ci.macosRunnerLabels`; keep physical iPhone workflows behind a separate approval gate.
 
-See [Adopting the macOS CI Eligibility Lane](docs/adopting-macos-ci-eligibility.md), [Self-Hosted Runner Scope and Onboarding](docs/self-hosted-runner-scope-onboarding.md), and the [Private Adapter Rollout Checklist](docs/private-adapter-rollout-checklist.md) for a repeatable public/private adoption path. Public proof records include [Foil macOS CI Eligibility Proof - 2026-06-25](docs/proof-records/foil-macos-ci-eligibility-2026-06-25.md) and [Foil iOS CI Eligibility Proof - 2026-06-25](docs/proof-records/foil-ios-ci-eligibility-2026-06-25.md).
+See [Adopting the macOS CI Eligibility Lane](docs/adopting-macos-ci-eligibility.md), [Adopting the iOS CI Eligibility Lane](docs/adopting-ios-ci-eligibility.md), [Self-Hosted Runner Scope and Onboarding](docs/self-hosted-runner-scope-onboarding.md), and the [Private Adapter Rollout Checklist](docs/private-adapter-rollout-checklist.md) for a repeatable public/private adoption path. Public proof records include [Foil macOS CI Eligibility Proof - 2026-06-25](docs/proof-records/foil-macos-ci-eligibility-2026-06-25.md) and [Foil iOS CI Eligibility Proof - 2026-06-25](docs/proof-records/foil-ios-ci-eligibility-2026-06-25.md).
 
 ## Private Adapters
 
