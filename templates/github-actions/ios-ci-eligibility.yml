@@ -1,0 +1,102 @@
+name: Apple Agent Kit iOS CI Eligibility
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/ios-ci-eligibility.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ci-eligibility-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eligibility:
+    name: eligibility
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Checkout Apple Agent Kit
+        uses: actions/checkout@v6
+        with:
+          repository: neonwatty/apple-agent-kit
+          ref: main
+          path: .aak/apple-agent-kit
+
+      - name: Materialize private adapter
+        env:
+          APPLE_AGENT_KIT_ADAPTER_JSON: ${{ secrets.APPLE_AGENT_KIT_ADAPTER_JSON }}
+        run: |
+          set -euo pipefail
+          test -n "$APPLE_AGENT_KIT_ADAPTER_JSON"
+          printf '%s' "$APPLE_AGENT_KIT_ADAPTER_JSON" > .apple-agent-kit.json
+
+      - name: Validate private adapter
+        run: python3 .aak/apple-agent-kit/scripts/aak.py validate-adapter .apple-agent-kit.json --json
+
+      - name: Assert iOS-only adapter shape
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+
+          with open(".apple-agent-kit.json", encoding="utf-8") as handle:
+              adapter = json.load(handle)
+          platforms = set((adapter.get("platforms") or {}).keys())
+          if platforms != {"ios"}:
+              raise SystemExit(f"expected iOS-only adapter, got: {sorted(platforms)}")
+          print("adapter platforms: ios")
+          PY
+
+      - name: Render reusable workflow templates
+        run: |
+          set -euo pipefail
+          rm -rf artifacts/aak-render
+          python3 .aak/apple-agent-kit/scripts/aak.py render-workflows \
+            --adapter .apple-agent-kit.json \
+            --output artifacts/aak-render \
+            --force
+
+      - name: Xcode readiness
+        run: python3 .aak/apple-agent-kit/scripts/aak.py check-xcode --json
+
+      - name: Simulator inventory
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+          import subprocess
+
+          payload = json.loads(
+              subprocess.check_output(
+                  ["xcrun", "simctl", "list", "devices", "available", "-j"],
+                  text=True,
+              )
+          )
+          iphones = [
+              device
+              for devices in payload.get("devices", {}).values()
+              for device in devices
+              if device.get("isAvailable")
+              and str(device.get("name", "")).startswith("iPhone")
+          ]
+          if not iphones:
+              raise SystemExit("No available iPhone simulator found")
+          print(json.dumps({
+              "ok": True,
+              "available_iPhone_simulators": len(iphones),
+              "physical_device_actions": False,
+          }, sort_keys=True))
+          PY
+
+      - name: Device-free assertion
+        run: |
+          set -euo pipefail
+          echo "No product build, product test, app install, WDA, screenshots, app launch, app smoke, UI smoke, microphone QA, live transcription, simulator boot, or physical-device smoke is run by this workflow."

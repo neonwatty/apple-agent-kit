@@ -240,7 +240,7 @@ def render_text(template_name: str, text: str, adapter: dict[str, Any]) -> str:
 
     if template_name == "macos-ci.yml":
         text = text.replace("runs-on: macos-15", f"runs-on: {macos_runner}")
-    if template_name == "ios-simulator-ci.yml":
+    if template_name in {"ios-simulator-ci.yml", "ios-ci-eligibility.yml"}:
         text = text.replace("runs-on: macos-15", f"runs-on: {macos_runner}")
     if template_name == "ios-physical-device.yml":
         label_text = "[" + ", ".join(physical_labels) + "]"
