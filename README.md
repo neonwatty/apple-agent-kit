@@ -42,7 +42,7 @@ The rendered workflow set includes device-free eligibility templates:
 
 Bind the self-hosted Mac lanes with private `ci.macosRunnerLabels`; keep physical iPhone workflows behind a separate approval gate.
 
-See [Adopting the macOS CI Eligibility Lane](docs/adopting-macos-ci-eligibility.md), [Adopting the iOS CI Eligibility Lane](docs/adopting-ios-ci-eligibility.md), [Self-Hosted Runner Scope and Onboarding](docs/self-hosted-runner-scope-onboarding.md), and the [Private Adapter Rollout Checklist](docs/private-adapter-rollout-checklist.md) for a repeatable public/private adoption path. Public proof records include [Foil macOS CI Eligibility Proof - 2026-06-25](docs/proof-records/foil-macos-ci-eligibility-2026-06-25.md) and [Foil iOS CI Eligibility Proof - 2026-06-25](docs/proof-records/foil-ios-ci-eligibility-2026-06-25.md).
+See [Adopting the macOS CI Eligibility Lane](docs/adopting-macos-ci-eligibility.md), [Adopting the iOS CI Eligibility Lane](docs/adopting-ios-ci-eligibility.md), [Self-Hosted Runner Scope and Onboarding](docs/self-hosted-runner-scope-onboarding.md), and the [Private Adapter Rollout Checklist](docs/private-adapter-rollout-checklist.md) for a repeatable public/private adoption path. Public proof records include [Foil macOS CI Eligibility Proof - 2026-06-25](docs/proof-records/foil-macos-ci-eligibility-2026-06-25.md), [Foil iOS CI Eligibility Proof - 2026-06-25](docs/proof-records/foil-ios-ci-eligibility-2026-06-25.md), and [PRCard iOS CI Eligibility Proof - 2026-06-27](docs/proof-records/prcard-ios-ci-eligibility-2026-06-27.md).
 
 ## Private Adapters
 
