@@ -9,6 +9,7 @@ Use this checklist when applying Apple Agent Kit to a private Apple app repo. Ke
 - Lane: runner health / macOS CI eligibility / iOS CI eligibility / simulator CI / physical device
 - Approved hardware binding:
 - Explicit exclusions:
+- Dedicated runner-health checklist, if applicable:
 
 ## Public Kit Baseline
 
@@ -64,6 +65,12 @@ Record:
 - Conclusion:
 - Relevant passed steps:
 - Sanitized notes:
+- Runner-health proof, if applicable:
+  - Manual-dispatch-only workflow:
+  - Matching runner count:
+  - Matching online runner count:
+  - Prohibited-action scan result:
+  - App/device/product automation excluded:
 
 ## Completion Gate
 
