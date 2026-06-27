@@ -1,0 +1,21 @@
+{
+  "name": "apple-agent-kit",
+  "version": "0.1.0",
+  "description": "Proof-driven automation patterns for macOS and iOS app work with coding agents.",
+  "author": {
+    "name": "Neon Watty",
+    "url": "https://github.com/neonwatty"
+  },
+  "homepage": "https://github.com/neonwatty/apple-agent-kit",
+  "repository": "https://github.com/neonwatty/apple-agent-kit",
+  "license": "MIT",
+  "keywords": [
+    "apple",
+    "automation",
+    "ci",
+    "codex",
+    "ios",
+    "macos",
+    "xcode"
+  ]
+}

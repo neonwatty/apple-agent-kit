@@ -7,4 +7,5 @@ build/
 *.dSYM
 artifacts/
 .apple-agent-kit.local.*
+docs/goals/
 __pycache__/

@@ -52,7 +52,7 @@ Rules:
 - Do not reconfigure an existing runner directory.
 - Do not stop or uninstall an existing runner service unless explicitly approved.
 - Create a new directory for the new repo, such as `~/actions-runner-repo-name`.
-- Use a distinct runner name, such as `repo-name-mac-mini-2`.
+- Use a distinct runner name, such as `repo-name-dedicated-mac`.
 - Keep a distinct work folder inside that runner directory.
 - Add a repo-specific label in addition to the hardware label.
 - Verify both old and new services are running after installation.
@@ -79,9 +79,9 @@ cd "$RUNNER_DIR"
   --unattended \
   --url https://github.com/OWNER/REPO \
   --token "$TOKEN" \
-  --name repo-name-mac-mini-2 \
+  --name repo-name-dedicated-mac \
   --work _work \
-  --labels mac-mini-2,repo-name \
+  --labels dedicated-mac-runner,repo-name \
   --replace
 ./svc.sh install
 ./svc.sh start
@@ -121,4 +121,3 @@ Before calling runner onboarding complete, prove:
 - The eligibility workflow completes from the PR branch.
 - The default-branch `workflow_dispatch` completes after merge.
 - Final notes explicitly say what was not run.
-

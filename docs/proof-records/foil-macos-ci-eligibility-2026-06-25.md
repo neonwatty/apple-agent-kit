@@ -17,7 +17,7 @@ This record captures the first default-branch proof that Apple Agent Kit can be 
 - Public app PR: `https://github.com/usefoil/foil/pull/326`
 - Public workflow name: `Apple Agent Kit macOS CI Eligibility`
 - Public workflow file path: `.github/workflows/macos-ci-eligibility.yml`
-- Public runner labels used by the workflow: `self-hosted`, `macOS`, `mac-mini-2`, `foil`
+- Public runner labels used by the workflow: dedicated self-hosted macOS labels, redacted from this public proof record.
 
 These labels are intentionally visible because GitHub Actions `runs-on` values in public repositories are public workflow content.
 
@@ -44,7 +44,7 @@ Default-branch proof:
 - Commit: `6ca2bece90c5b69b835682ceb68a952014be9b6b`
 - Result: success
 - Duration: 19 seconds
-- Runner name observed in GitHub Actions: `foil-mac-mini-2`
+- Runner name observed in GitHub Actions: redacted dedicated Mac runner.
 
 ## Passed Steps
 
