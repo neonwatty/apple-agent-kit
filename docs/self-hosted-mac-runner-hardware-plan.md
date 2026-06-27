@@ -11,7 +11,7 @@ This plan is for a device-free Mac mini runner lane. It validates the Mac runner
 
 ## Public Kit Shape
 
-Use `templates/github-actions/macos-runner-health.yml` as the public generic template. It is intentionally limited to:
+Use `templates/github-actions/macos-runner-health.yml` as the public generic template. Pair it with the [Dedicated Mac Runner-Health Checklist](dedicated-mac-runner-health-checklist.md) when preparing a private self-hosted runner. The workflow is intentionally limited to:
 
 - host summary;
 - Xcode summary;
