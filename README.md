@@ -15,10 +15,23 @@ The public kit contains reusable patterns only: skills, scripts, templates, rece
 ## Repository Shape
 
 - `.codex-plugin/plugin.json` - Codex plugin manifest.
+- `.claude-plugin/plugin.json` - Claude Code plugin manifest.
 - `skills/` - Agent-facing playbooks.
 - `docs/` - Design, adapter contract, evidence policy, and operating notes.
 - `scripts/` - Generic helper scripts that must not contain app-specific values.
 - `templates/` - Reusable workflow and config templates.
+
+## Install and Validate
+
+Apple Agent Kit v0 is source-first. Start with:
+
+```bash
+git clone https://github.com/neonwatty/apple-agent-kit.git
+cd apple-agent-kit
+python3 scripts/validate-release.py
+```
+
+See [Install and Reuse](docs/install.md) for Codex and Claude Code validation paths, including local plugin validation and source-checkout testing.
 
 ## v0 Commands
 
@@ -42,7 +55,9 @@ The rendered workflow set includes device-free eligibility templates:
 
 Bind the self-hosted Mac lanes with private `ci.macosRunnerLabels`; keep physical iPhone workflows behind a separate approval gate.
 
-See [Adopting the macOS CI Eligibility Lane](docs/adopting-macos-ci-eligibility.md), [Adopting the iOS CI Eligibility Lane](docs/adopting-ios-ci-eligibility.md), [Self-Hosted Runner Scope and Onboarding](docs/self-hosted-runner-scope-onboarding.md), and the [Private Adapter Rollout Checklist](docs/private-adapter-rollout-checklist.md) for a repeatable public/private adoption path. Public proof records include [Foil macOS CI Eligibility Proof - 2026-06-25](docs/proof-records/foil-macos-ci-eligibility-2026-06-25.md), [Foil iOS CI Eligibility Proof - 2026-06-25](docs/proof-records/foil-ios-ci-eligibility-2026-06-25.md), and [PRCard iOS CI Eligibility Proof - 2026-06-27](docs/proof-records/prcard-ios-ci-eligibility-2026-06-27.md).
+See [Adopting the macOS CI Eligibility Lane](docs/adopting-macos-ci-eligibility.md), [Adopting the iOS CI Eligibility Lane](docs/adopting-ios-ci-eligibility.md), [Self-Hosted Runner Scope and Onboarding](docs/self-hosted-runner-scope-onboarding.md), and the [Private Adapter Rollout Checklist](docs/private-adapter-rollout-checklist.md) for a repeatable public/private adoption path. Public proof records are indexed in [Proof Records](docs/proof-records/index.md).
+
+For release gating, use [v0 Release Readiness](docs/v0-release-readiness.md).
 
 ## Private Adapters
 

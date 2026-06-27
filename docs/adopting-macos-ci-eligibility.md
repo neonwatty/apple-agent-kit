@@ -115,7 +115,7 @@ gh secret list --repo OWNER/REPO | rg '^APPLE_AGENT_KIT_ADAPTER_JSON\b'
 6. Bind the job to approved public runner labels:
 
 ```yaml
-runs-on: [self-hosted, macOS, mac-mini-2, app-label]
+runs-on: [self-hosted, macOS, dedicated-mac-runner, app-label]
 ```
 
 7. Add a direct assertion for the dedicated binding:
@@ -124,7 +124,7 @@ runs-on: [self-hosted, macOS, mac-mini-2, app-label]
 - name: Assert dedicated Mac binding
   run: |
     set -euo pipefail
-    grep -F "runs-on: [self-hosted, macOS, mac-mini-2, app-label]" .github/workflows/macos-ci-eligibility.yml
+    grep -F "runs-on: [self-hosted, macOS, dedicated-mac-runner, app-label]" .github/workflows/macos-ci-eligibility.yml
 ```
 
 8. Validate and render with a local copy of the private adapter before opening the PR:
@@ -165,7 +165,7 @@ concurrency:
 
 jobs:
   eligibility:
-    runs-on: [self-hosted, macOS, mac-mini-2, app-label]
+    runs-on: [self-hosted, macOS, dedicated-mac-runner, app-label]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -187,7 +187,7 @@ jobs:
       - name: Assert dedicated Mac binding
         run: |
           set -euo pipefail
-          grep -F "runs-on: [self-hosted, macOS, mac-mini-2, app-label]" .github/workflows/macos-ci-eligibility.yml
+          grep -F "runs-on: [self-hosted, macOS, dedicated-mac-runner, app-label]" .github/workflows/macos-ci-eligibility.yml
       - name: Render reusable workflow templates
         run: |
           set -euo pipefail
