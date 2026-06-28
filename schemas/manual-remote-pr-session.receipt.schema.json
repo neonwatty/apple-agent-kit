@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/apple-agent-kit/manual-remote-pr-session.receipt.schema.json",
+  "title": "Apple Agent Kit Manual Remote PR Session Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "requestId",
+    "repository",
+    "pullRequest",
+    "git",
+    "hostProfileAlias",
+    "startedAt",
+    "completedAt",
+    "result",
+    "commands",
+    "launch",
+    "codexSession",
+    "physicalDevice",
+    "artifacts",
+    "redactions"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "physicalDevice": {
+            "type": "object",
+            "required": ["requested"],
+            "properties": {
+              "requested": { "const": true }
+            }
+          }
+        },
+        "required": ["physicalDevice"]
+      },
+      "then": {
+        "properties": {
+          "physicalDevice": {
+            "type": "object",
+            "required": ["gate", "approvalRef"],
+            "properties": {
+              "gate": { "const": "explicit-private-approval" },
+              "approvalRef": { "type": "string", "minLength": 1, "maxLength": 256 }
+            }
+          }
+        },
+        "required": ["physicalDevice"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "physicalDevice": {
+            "type": "object",
+            "required": ["requested"],
+            "properties": {
+              "requested": { "const": false }
+            }
+          }
+        },
+        "required": ["physicalDevice"]
+      },
+      "then": {
+        "properties": {
+          "physicalDevice": {
+            "type": "object",
+            "required": ["gate", "approvalRef"],
+            "properties": {
+              "gate": { "const": "disabled" },
+              "approvalRef": { "const": "" }
+            }
+          }
+        },
+        "required": ["physicalDevice"]
+      }
+    }
+  ],
+  "properties": {
+    "schemaVersion": { "const": "manual-remote-pr-session/v1" },
+    "kind": { "const": "manual-remote-pr-session.receipt" },
+    "requestId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fullName", "htmlUrl"],
+      "properties": {
+        "fullName": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+        "htmlUrl": { "type": "string" }
+      }
+    },
+    "pullRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "htmlUrl"],
+      "properties": {
+        "number": { "type": "integer", "minimum": 1 },
+        "htmlUrl": { "type": "string" }
+      }
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha"],
+      "properties": {
+        "sha": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$" }
+      }
+    },
+    "hostProfileAlias": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "result": { "enum": ["succeeded", "failed", "canceled", "rejected", "timed-out"] },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "class", "summary", "durationSeconds", "exitCode", "result"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+          "class": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 240 },
+          "durationSeconds": { "type": "number", "minimum": 0 },
+          "exitCode": { "type": "integer" },
+          "result": { "enum": ["succeeded", "failed", "canceled", "skipped", "timed-out"] }
+        }
+      }
+    },
+    "launch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requested", "result"],
+      "properties": {
+        "requested": { "type": "boolean" },
+        "result": { "enum": ["not-requested", "succeeded", "failed", "skipped"] }
+      }
+    },
+    "codexSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requested", "created", "sessionRef", "instructionsDigest"],
+      "properties": {
+        "requested": { "type": "boolean" },
+        "created": { "type": "boolean" },
+        "sessionRef": { "type": "string", "maxLength": 256 },
+        "instructionsDigest": { "type": "string", "maxLength": 128 }
+      }
+    },
+    "physicalDevice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requested", "gate", "approvalRef"],
+      "properties": {
+        "requested": { "type": "boolean" },
+        "gate": { "enum": ["disabled", "explicit-private-approval"] },
+        "approvalRef": { "type": "string", "maxLength": 256 }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed", "withheld"],
+      "properties": {
+        "allowed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "path", "sha256", "sizeBytes"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "path": { "type": "string", "minLength": 1, "maxLength": 512 },
+              "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+              "sizeBytes": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "withheld": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "reason"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "reason": { "type": "string", "minLength": 1, "maxLength": 512 }
+            }
+          }
+        }
+      }
+    },
+    "redactions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 512 }
+    }
+  }
+}

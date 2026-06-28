@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "manual-remote-pr-session/v1",
+  "kind": "manual-remote-pr-session.receipt",
+  "requestId": "mprs-example-001",
+  "repository": {
+    "fullName": "example/app",
+    "htmlUrl": "https://github.com/example/app"
+  },
+  "pullRequest": {
+    "number": 42,
+    "htmlUrl": "https://github.com/example/app/pull/42"
+  },
+  "git": {
+    "sha": "0123456789abcdef0123456789abcdef01234567"
+  },
+  "hostProfileAlias": "example-mac",
+  "startedAt": "2026-06-28T00:01:00Z",
+  "completedAt": "2026-06-28T00:06:00Z",
+  "result": "succeeded",
+  "commands": [
+    {
+      "id": "test",
+      "class": "test",
+      "summary": "Approved unit-test run profile completed",
+      "durationSeconds": 270,
+      "exitCode": 0,
+      "result": "succeeded"
+    }
+  ],
+  "launch": {
+    "requested": false,
+    "result": "not-requested"
+  },
+  "codexSession": {
+    "requested": false,
+    "created": false,
+    "sessionRef": "",
+    "instructionsDigest": ""
+  },
+  "physicalDevice": {
+    "requested": false,
+    "gate": "disabled",
+    "approvalRef": ""
+  },
+  "artifacts": {
+    "allowed": [],
+    "withheld": [
+      {
+        "label": "raw-test-log",
+        "reason": "artifact mode is receipt-only"
+      }
+    ]
+  },
+  "redactions": [
+    "raw stdout and stderr withheld"
+  ]
+}

@@ -1,0 +1,164 @@
+# Manual Remote PR Session
+
+Manual Remote PR Session is a public contract for asking a predefined private Mac to test an exact pull request commit. It is intentionally pull-based: GitHub creates a validated job request artifact, and the remote Mac polls for accepted work through a private adapter. The public repo contains only generic templates, schemas, validators, and operating rules.
+
+## Goals
+
+- Let a developer manually run `workflow_dispatch` from a PR and name the PR number, exact SHA, host profile alias, and run profile.
+- Ensure the remote Mac checks out the exact SHA from that PR before running any configured command.
+- Support test-only, app-launch, and local Codex-assisted manual testing modes as independent gates.
+- Produce sanitized proof receipts with PR, SHA, host profile alias, command classes, results, and artifact allow/withhold decisions.
+- Keep merge-queue automation separate. This feature starts as a manual lane only.
+- Design physical iPhone support as a gated extension, disabled by default.
+
+## Non-Goals
+
+- No public product adapters, bundle identifiers, runner labels, signing teams, device names, local paths, or command inventories.
+- No inbound webhook or LAN listener on the remote Mac.
+- No arbitrary shell command input from GitHub workflow fields.
+- No automatic merge-queue trigger in v1.
+- No default physical-device access.
+
+## Architecture
+
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant GH as GitHub workflow_dispatch
+    participant Artifact as GitHub Actions artifact queue
+    participant Poller as Private Mac poller
+    participant Adapter as Private repo adapter
+    participant Codex as Optional local Codex bridge
+    Dev->>GH: PR number, SHA, host alias, run profile, gates
+    GH->>GH: Verify SHA belongs to PR
+    GH->>GH: Validate job request schema
+    GH->>Artifact: Upload job-request.json
+    Poller->>Artifact: Poll and download validated requests
+    Poller->>Adapter: Check host/run/actor/branch allowlists
+    Adapter->>Adapter: Check out exact SHA in clean worktree
+    Adapter->>Adapter: Run configured allowlisted commands
+    Adapter->>Adapter: Optionally launch app
+    Adapter->>Codex: Optionally create local session
+    Adapter->>GH: Publish sanitized receipt
+```
+
+The public workflow is only a request factory. The remote Mac remains responsible for final acceptance because it owns local state, signing context, app launch permissions, and artifact policy.
+
+## Public Workflow Template
+
+Use [templates/github-actions/manual-remote-pr-session.yml](../templates/github-actions/manual-remote-pr-session.yml) in a private app repo. It:
+
+- runs only through `workflow_dispatch`;
+- accepts `pr_number`, `sha`, `host_profile_alias`, `run_profile`, `launch_app`, `create_codex_session`, `codex_instructions`, and `artifact_mode`;
+- verifies the SHA is one of the PR commits using the GitHub API;
+- writes `artifacts/manual-remote-pr-session/job-request.json`;
+- validates that request with `aak validate-manual-remote-job`;
+- uploads the JSON as a GitHub Actions artifact for private pollers.
+
+The workflow does not run product tests, does not use a self-hosted runner, does not launch an app, does not start Codex, and does not touch devices.
+
+## Private Adapter Contract
+
+Private repos add a `manualRemotePrSession` adapter section. The public example documents the field names; real values stay private.
+
+Required private responsibilities:
+
+- map `hostProfileAlias` to one approved local host profile;
+- map `runProfile` to allowlisted commands with timeouts;
+- reject requests whose actor, PR base, repository, SHA, or host alias is not allowed;
+- create a clean checkout or worktree at the exact SHA;
+- publish one sanitized receipt per accepted request;
+- never run command strings supplied by workflow input;
+- store raw logs and screenshots only where the private evidence policy permits.
+
+## Job Request Schema
+
+The request schema lives at [schemas/manual-remote-pr-session.job-request.schema.json](../schemas/manual-remote-pr-session.job-request.schema.json). A valid request includes:
+
+- `requestId`, `schemaVersion`, and `kind`;
+- repository full name, PR number, PR URL, and exact commit SHA;
+- sanitized `hostProfileAlias` and `runProfile`;
+- boolean action gates for tests, app launch, Codex session creation, and physical device use;
+- optional Codex instructions with bounded length;
+- artifact mode and allowlist globs;
+- workflow requester and validation metadata.
+
+Use:
+
+```bash
+python3 scripts/aak.py validate-manual-remote-job templates/manual-remote-pr-session.job-request.example.json --json
+```
+
+## Codex-Session Bridge Design
+
+The Codex bridge is a private local adapter feature. The public job request can ask for a session, but the remote Mac decides whether to create one.
+
+Bridge flow:
+
+1. Poller accepts a validated job and checks out the exact SHA.
+2. Adapter writes a local session envelope containing the request ID, PR number, SHA, run profile, command results so far, artifact policy, and custom instructions.
+3. Adapter redacts secrets and strips raw logs before putting content into the Codex instruction file.
+4. Adapter invokes the private Codex launcher configured for that host profile.
+5. Receipt records `codexSession.created`, a sanitized local session reference or digest, and whether custom instructions were used.
+
+The public contract does not assume a specific Codex CLI or desktop integration. Private adapters can implement the bridge with a local command, a desktop deep link, or a queued instruction file.
+
+## Receipt Model
+
+The receipt schema lives at [schemas/manual-remote-pr-session.receipt.schema.json](../schemas/manual-remote-pr-session.receipt.schema.json). Receipts should be posted back to GitHub as a check run, PR comment, or private storage link according to the repo policy.
+
+A sanitized receipt records:
+
+- repository, PR number, exact SHA, request ID, and host profile alias;
+- started and completed timestamps;
+- accepted/rejected/final result;
+- command IDs, command classes, sanitized summaries, durations, exit codes, and per-command result;
+- app launch and Codex-session outcomes when requested;
+- allowed artifacts with labels, relative paths or storage IDs, hashes, and sizes;
+- withheld artifacts with reasons;
+- redaction notes.
+
+Receipts must not contain raw stdout, raw stderr, literal private shell commands, access tokens, private keys, hostnames, serial numbers, UDIDs, local usernames, or absolute local paths.
+
+Use:
+
+```bash
+python3 scripts/aak.py validate-manual-remote-receipt templates/manual-remote-pr-session.receipt.example.json --json
+```
+
+## Safety Model
+
+- Pull only: the remote Mac polls GitHub artifacts and never opens an inbound webhook.
+- Exact SHA: the workflow verifies the SHA belongs to the PR, and the private adapter verifies it again before checkout.
+- Two-step acceptance: GitHub validates request shape; the private adapter validates host, actor, branch, repo, run profile, and local readiness.
+- Command allowlist: only private adapter commands can run.
+- Separate gates: tests, app launch, Codex session creation, and physical device access are independent booleans.
+- Evidence minimization: the default artifact mode is `receipt-only`; allowed artifacts require private allowlist globs.
+- Sanitized receipts: receipts include proof metadata without raw logs, secrets, host identifiers, or local paths.
+- Lease and concurrency: the poller must claim a request before running it and must publish timeout or rejection receipts.
+- Merge queue separation: merge-queue automation can reuse receipt contracts later, but it must use a different workflow and stricter policy.
+
+## Physical iPhone Extension
+
+Physical iPhone support is designed but disabled by default. To enable it privately, require:
+
+- `actions.physicalDevice` set to `true`;
+- `gates.physicalDeviceApproval` set to `explicit-private-approval`;
+- an `approvalRef` recorded in the request and receipt;
+- a host profile with a private device policy;
+- a stricter artifact policy that withholds screenshots unless explicitly approved;
+- receipt validation that states physical device actions were requested and approved.
+
+Public templates and examples keep `physicalDevice` false.
+
+## First Dogfood Plan: Private Remote Mac
+
+1. Create a private adapter branch for the first remote Mac with one sanitized host alias, one test-only run profile, and `enabled: false`.
+2. Install the private poller in dry-run mode. It should download job requests, validate them, and publish rejected or dry-run receipts without checkout.
+3. Enable checkout-only mode for one internal PR. Verify the poller checks out the exact SHA and emits a receipt with no command execution.
+4. Enable the unit-test run profile. Keep artifact mode at `receipt-only` and confirm command IDs, durations, exit codes, and withheld artifact reasons appear in the receipt.
+5. Enable app launch for one sterile smoke profile after test receipts are stable.
+6. Enable Codex-session creation with a short custom instruction prompt. Confirm the receipt includes only a session digest or sanitized reference.
+7. Keep physical iPhone support disabled until a separate private approval and evidence policy review is complete.
+
+Dogfood success is three consecutive manual PR sessions with exact-SHA checkout, deterministic command selection, sanitized receipts, and no private host or artifact leakage.

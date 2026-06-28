@@ -23,6 +23,35 @@
     "macosRunnerLabels": ["self-hosted", "macOS", "apple-agent-kit"],
     "physicalRunnerLabels": ["self-hosted", "macOS", "ios-physical"]
   },
+  "manualRemotePrSession": {
+    "enabled": false,
+    "queueProvider": "github-actions-artifact",
+    "hostProfiles": [
+      {
+        "alias": "example-mac",
+        "acceptedRunProfiles": ["unit-tests", "ui-smoke"],
+        "allowLaunchApp": true,
+        "allowCodexSession": true,
+        "physicalDeviceDefault": false
+      }
+    ],
+    "runProfiles": [
+      {
+        "id": "unit-tests",
+        "commands": [
+          {
+            "id": "test",
+            "command": "make test",
+            "timeoutMinutes": 30
+          }
+        ],
+        "artifactPolicy": {
+          "mode": "receipt-only",
+          "allowedGlobs": []
+        }
+      }
+    ]
+  },
   "privacy": {
     "screenshots": "sterile-only",
     "rawAccessibilityTrees": false,
