@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_FILES = [
     ".codex-plugin/plugin.json",
     ".claude-plugin/plugin.json",
+    "AGENTS.md",
     "CHANGELOG.md",
     "LICENSE",
     "README.md",
@@ -30,6 +31,8 @@ REQUIRED_FILES = [
     "docs/v0-release-readiness.md",
     "scripts/aak.py",
     "skills/codex-autoreview/SKILL.md",
+    "skills/codex-pr-closeout-review/SKILL.md",
+    "skills/codex-pr-closeout-review/scripts/codex-pr-review",
     "schemas/manual-remote-pr-session.job-request.schema.json",
     "schemas/manual-remote-pr-session.receipt.schema.json",
     "templates/adapter.example.json",
@@ -134,6 +137,7 @@ def check_cli() -> None:
     run(["python3", "scripts/aak.py", "validate-manual-remote-job", "templates/manual-remote-pr-session.job-request.example.json", "--json"])
     run(["python3", "scripts/aak.py", "validate-manual-remote-receipt", "templates/manual-remote-pr-session.receipt.example.json", "--json"])
     run(["python3", "scripts/aak.py", "inspect", "--repo", ".", "--adapter", "templates/adapter.example.json", "--json"])
+    run(["python3", "skills/codex-pr-closeout-review/scripts/codex-pr-review", "--self-test"])
     with tempfile.TemporaryDirectory(prefix="aak-release-render-") as output:
         completed = run(
             [

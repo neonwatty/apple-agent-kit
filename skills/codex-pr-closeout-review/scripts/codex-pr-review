@@ -1,0 +1,761 @@
+#!/usr/bin/env python3
+"""Codex-native structured closeout review helper for Apple Agent Kit."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import textwrap
+import time
+from pathlib import Path
+from typing import Any
+
+
+SAFE_GIT_CONFIG_ARGS = (
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.pager=cat",
+    "-c",
+    "diff.external=",
+    "-c",
+    "diff.renames=false",
+    "-c",
+    "pager.diff=cat",
+    "-c",
+    "pager.log=cat",
+    "-c",
+    "pager.show=cat",
+)
+SAFE_DIFF_FLAGS = ("--no-ext-diff", "--no-textconv", "--no-renames")
+MAX_TEXT_BYTES = 180_000
+
+SENSITIVE_PATH_PARTS = {
+    ".aws",
+    ".azure",
+    ".config/gcloud",
+    ".docker",
+    ".gnupg",
+    ".ssh",
+    "private",
+    "secrets",
+}
+SENSITIVE_NAME_PATTERNS = [
+    re.compile(r"(^|/)\.env($|[._/-])", re.IGNORECASE),
+    re.compile(r"(^|/)(id_rsa|id_dsa|id_ecdsa|id_ed25519)(\.pub)?$", re.IGNORECASE),
+    re.compile(r"\.(pem|p12|pfx|key)$", re.IGNORECASE),
+    re.compile(
+        r"(^|/)[^/]*(secret|token|credential|credentials|service[-_]?account|private[-_]?key|apikey|api[-_]?key)[^/]*$",
+        re.IGNORECASE,
+    ),
+]
+SECRET_VALUE_PATTERNS = [
+    re.compile(r"-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----"),
+    re.compile(
+        r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*(?:[\"'][A-Za-z0-9_./+=-]{12,}[\"']|[A-Za-z0-9_+=/-]{20,})"
+    ),
+    re.compile(r"(?i)bearer\s+[A-Za-z0-9._-]{20,}"),
+    re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
+    re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}\b"),
+    re.compile(r"\bnpm_[A-Za-z0-9]{20,}\b"),
+    re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
+    re.compile(r"\b(?:A3T|AKIA|ASIA)[A-Z0-9]{16}\b"),
+]
+
+SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["findings", "overall_correctness", "overall_explanation", "overall_confidence"],
+    "properties": {
+        "findings": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["title", "body", "priority", "confidence", "category", "code_location"],
+                "properties": {
+                    "title": {"type": "string", "minLength": 1, "maxLength": 140},
+                    "body": {"type": "string", "minLength": 1, "maxLength": 2000},
+                    "priority": {"type": "string", "enum": ["P0", "P1", "P2", "P3"]},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    "category": {
+                        "type": "string",
+                        "enum": ["bug", "security", "regression", "test_gap", "maintainability"],
+                    },
+                    "code_location": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": ["file_path", "line"],
+                        "properties": {
+                            "file_path": {"type": "string", "minLength": 1},
+                            "line": {"type": "integer", "minimum": 1},
+                        },
+                    },
+                },
+            },
+        },
+        "overall_correctness": {"type": "string", "enum": ["patch is correct", "patch is incorrect"]},
+        "overall_explanation": {"type": "string", "minLength": 1, "maxLength": 3000},
+        "overall_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    },
+}
+
+
+class ReviewError(Exception):
+    def __init__(self, message: str, code: int) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+def run(
+    command: list[str],
+    cwd: Path,
+    *,
+    input_text: str | None = None,
+    env: dict[str, str] | None = None,
+    timeout: int | None = None,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(command, cwd=cwd, input=input_text, text=True, capture_output=True, env=env, timeout=timeout)
+
+
+def safe_git_env() -> dict[str, str]:
+    return {
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_SYSTEM": os.devnull,
+        "GIT_OPTIONAL_LOCKS": "0",
+        "GIT_TERMINAL_PROMPT": "0",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PATH": os.environ.get("PATH", ""),
+    }
+
+
+def is_within(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def find_command(name: str, repo: Path) -> str | None:
+    command = Path(name)
+    if command.is_absolute() or any(separator in name for separator in (os.sep, os.altsep or "") if separator):
+        candidate = command if command.is_absolute() else repo / command
+        return str(candidate) if candidate.is_file() and os.access(candidate, os.X_OK) else None
+    for raw_part in os.environ.get("PATH", "").split(os.pathsep):
+        if not raw_part or raw_part == ".":
+            continue
+        part = Path(raw_part)
+        if not part.is_absolute():
+            continue
+        try:
+            resolved_part = part.resolve()
+            resolved_repo = repo.resolve()
+        except OSError:
+            continue
+        if is_within(resolved_part, resolved_repo):
+            continue
+        candidate = resolved_part / name
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
+def resolve_command(name: str, repo: Path) -> str:
+    resolved = find_command(name, repo)
+    if not resolved:
+        raise ReviewError(f"executable not found: {name}", 3)
+    return resolved
+
+
+def git(repo: Path, *args: str, check: bool = True) -> str:
+    result = run([resolve_command("git", repo), "--no-optional-locks", *SAFE_GIT_CONFIG_ARGS, *args], repo, env=safe_git_env())
+    if check and result.returncode != 0:
+        raise ReviewError(f"git failed: {' '.join(args)}\n{result.stderr or result.stdout}", 3)
+    return result.stdout
+
+
+def git_paths(repo: Path, *args: str) -> list[str]:
+    return [path for path in git(repo, *args).split("\0") if path]
+
+
+def repo_root() -> Path:
+    git_bin = find_command("git", Path.cwd()) or "git"
+    result = run([git_bin, "--no-optional-locks", *SAFE_GIT_CONFIG_ARGS, "rev-parse", "--show-toplevel"], Path.cwd(), env=safe_git_env())
+    if result.returncode != 0:
+        raise ReviewError("codex-pr-review must run inside a git repository", 3)
+    return Path(result.stdout.strip()).resolve()
+
+
+def current_branch(repo: Path) -> str:
+    return git(repo, "branch", "--show-current", check=False).strip() or "detached"
+
+
+def is_dirty(repo: Path) -> bool:
+    return bool(git(repo, "status", "--porcelain").strip())
+
+
+def detect_pr_base(repo: Path) -> str | None:
+    gh_bin = find_command("gh", repo)
+    if not gh_bin:
+        return None
+    result = run([gh_bin, "pr", "view", "--json", "baseRefName", "--jq", ".baseRefName"], repo)
+    base = result.stdout.strip()
+    return f"origin/{base}" if result.returncode == 0 and base else None
+
+
+def choose_target(repo: Path, mode: str, base: str | None) -> tuple[str, str | None]:
+    mode = "local" if mode == "uncommitted" else mode
+    branch = current_branch(repo)
+    if mode == "local" or (mode == "auto" and is_dirty(repo)):
+        return "local", None
+    if mode == "commit":
+        return "commit", None
+    if mode == "branch" or (mode == "auto" and branch not in {"main", "master"}):
+        return "branch", base or detect_pr_base(repo) or "origin/main"
+    raise ReviewError("no review target: clean main checkout and no forced mode", 3)
+
+
+def validate_git_ref(repo: Path, ref: str, label: str) -> str:
+    if not ref or ref.startswith("-") or ":" in ref or "\0" in ref or any(char.isspace() for char in ref):
+        raise ReviewError(f"unsafe {label} ref: {ref}", 3)
+    result = git(repo, "rev-parse", "--verify", "--quiet", "--end-of-options", f"{ref}^{{commit}}", check=False)
+    if not result:
+        raise ReviewError(f"unknown {label} ref: {ref}", 3)
+    return ref
+
+
+def bounded(text: str, limit: int = MAX_TEXT_BYTES) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"\n\n[truncated at {limit} characters]\n"
+
+
+def read_prefix(path: Path, limit: int) -> tuple[bytes, bool]:
+    data = path.read_bytes()[: limit + 1]
+    return data[:limit], len(data) > limit
+
+
+def secret_text_risk(text: str) -> bool:
+    return any(pattern.search(text) for pattern in SECRET_VALUE_PATTERNS)
+
+
+def require_no_secret_values(label: str, text: str) -> None:
+    if secret_text_risk(text):
+        raise ReviewError(f"refusing to include secret-like content from {label}", 3)
+
+
+def path_has_sensitive_part(rel: str | Path) -> bool:
+    normalized = Path(rel).as_posix().lower()
+    if "/.config/gcloud/" in f"/{normalized}/":
+        return True
+    return any(part.lower() in SENSITIVE_PATH_PARTS for part in Path(rel).parts)
+
+
+def raw_path_has_symlink_component(repo: Path, rel_path: Path) -> bool:
+    current = repo.resolve()
+    for part in rel_path.parts:
+        current = current / part
+        if current.is_symlink():
+            return True
+        if not current.exists():
+            break
+    return False
+
+
+def file_bundle_risk(repo: Path, path: Path, rel: str, *, allow_binary_omission: bool = False) -> str | None:
+    normalized = rel.replace(os.sep, "/")
+    if path_has_sensitive_part(normalized):
+        return "sensitive path"
+    for pattern in SENSITIVE_NAME_PATTERNS:
+        if pattern.search(normalized):
+            return "sensitive filename"
+    if path.is_symlink():
+        return "symlink"
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as exc:
+        return f"unreadable file: {exc}"
+    if not is_within(resolved, repo.resolve()):
+        return "path outside repository"
+    if not path.is_file():
+        return "not a regular file"
+    data, _ = read_prefix(path, MAX_TEXT_BYTES)
+    if b"\0" in data:
+        return None if allow_binary_omission else "binary file"
+    if secret_text_risk(data.decode("utf-8", errors="replace")):
+        return "secret-like content"
+    return None
+
+
+def read_text(path: Path, limit: int = MAX_TEXT_BYTES) -> str:
+    data, truncated = read_prefix(path, limit)
+    if b"\0" in data:
+        return "[binary file omitted]"
+    text = data.decode("utf-8", errors="replace")
+    if truncated:
+        return text + f"\n\n[truncated at {limit} characters]\n"
+    return text
+
+
+def safe_untracked_files(repo: Path) -> list[str]:
+    blocked: list[str] = []
+    included: list[str] = []
+    for rel in git_paths(repo, "ls-files", "--others", "--exclude-standard", "-z"):
+        risk = file_bundle_risk(repo, repo / rel, rel, allow_binary_omission=True)
+        if risk:
+            blocked.append(f"{rel} ({risk})")
+        else:
+            included.append(rel)
+    if blocked:
+        detail = "\n".join(f"- {item}" for item in blocked[:20])
+        raise ReviewError("refusing to include unsafe untracked files:\n" + detail, 3)
+    return included
+
+
+def local_bundle(repo: Path) -> str:
+    staged = git(repo, "diff", *SAFE_DIFF_FLAGS, "--cached", "--patch")
+    unstaged = git(repo, "diff", *SAFE_DIFF_FLAGS, "--patch")
+    untracked = safe_untracked_files(repo)
+    if not staged.strip() and not unstaged.strip() and not untracked:
+        raise ReviewError("no local changes to review", 3)
+    parts = [
+        "# Git Status",
+        git(repo, "status", "--short", "--untracked-files=no").rstrip(),
+        "# Staged Diff",
+        git(repo, "diff", *SAFE_DIFF_FLAGS, "--cached", "--stat"),
+        bounded(staged),
+        "# Unstaged Diff",
+        git(repo, "diff", *SAFE_DIFF_FLAGS, "--stat"),
+        bounded(unstaged),
+    ]
+    if untracked:
+        parts.append("# Untracked Files")
+        for rel in untracked:
+            parts.append(f"## {rel}\n{read_text(repo / rel)}")
+    return "\n\n".join(parts)
+
+
+def branch_bundle(repo: Path, base_ref: str) -> str:
+    base_ref = validate_git_ref(repo, base_ref, "base")
+    patch = git(repo, "diff", *SAFE_DIFF_FLAGS, "--patch", "--end-of-options", f"{base_ref}...HEAD")
+    if not patch.strip():
+        raise ReviewError(f"empty branch diff against {base_ref}", 3)
+    return "\n\n".join(
+        [
+            "# Branch Diff",
+            f"base: {base_ref}",
+            git(repo, "log", "--oneline", "--decorate", "--end-of-options", f"{base_ref}..HEAD"),
+            git(repo, "diff", *SAFE_DIFF_FLAGS, "--stat", "--end-of-options", f"{base_ref}...HEAD"),
+            bounded(patch),
+        ]
+    )
+
+
+def commit_bundle(repo: Path, commit_ref: str) -> str:
+    commit_ref = validate_git_ref(repo, commit_ref, "commit")
+    patch = git(repo, "show", *SAFE_DIFF_FLAGS, "--patch", "--format=fuller", "--end-of-options", commit_ref)
+    return "\n\n".join(
+        [
+            "# Commit Diff",
+            f"commit: {commit_ref}",
+            git(repo, "show", *SAFE_DIFF_FLAGS, "--stat", "--format=fuller", "--end-of-options", commit_ref),
+            bounded(patch),
+        ]
+    )
+
+
+def changed_paths(repo: Path, target: str, target_ref: str | None, commit_ref: str) -> set[str]:
+    if target == "local":
+        paths = set(git_paths(repo, "diff", *SAFE_DIFF_FLAGS, "--name-only", "--cached", "-z"))
+        paths.update(git_paths(repo, "diff", *SAFE_DIFF_FLAGS, "--name-only", "-z"))
+        paths.update(safe_untracked_files(repo))
+        return paths
+    if target == "branch":
+        assert target_ref
+        target_ref = validate_git_ref(repo, target_ref, "base")
+        return set(git_paths(repo, "diff", *SAFE_DIFF_FLAGS, "--name-only", "-z", "--end-of-options", f"{target_ref}...HEAD"))
+    commit_ref = validate_git_ref(repo, commit_ref, "commit")
+    return set(git_paths(repo, "show", *SAFE_DIFF_FLAGS, "--name-only", "--format=", "-z", "--end-of-options", commit_ref))
+
+
+def validate_repo_file(repo: Path, raw: str, label: str) -> tuple[str, str]:
+    rel_path = Path(raw)
+    if rel_path.is_absolute() or ".." in rel_path.parts or not rel_path.parts:
+        raise ReviewError(f"{label} must be repo-relative: {raw}", 3)
+    raw_rel = rel_path.as_posix()
+    if path_has_sensitive_part(raw_rel):
+        raise ReviewError(f"refusing sensitive {label}: {raw_rel}", 3)
+    if raw_path_has_symlink_component(repo, rel_path):
+        raise ReviewError(f"refusing symlinked {label}: {raw}", 3)
+    path = (repo / rel_path).resolve()
+    if not is_within(path, repo.resolve()):
+        raise ReviewError(f"{label} must stay inside repo: {raw}", 3)
+    rel = path.relative_to(repo.resolve()).as_posix()
+    risk = file_bundle_risk(repo, path, rel)
+    if risk:
+        raise ReviewError(f"refusing unsafe {label}: {rel} ({risk})", 3)
+    content = read_text(path)
+    require_no_secret_values(f"{label} {rel}", content)
+    return rel, content
+
+
+def extra_context(args: argparse.Namespace, repo: Path) -> str:
+    parts: list[str] = []
+    for prompt in args.prompt or []:
+        require_no_secret_values("--prompt", prompt)
+        parts.append("# Additional Prompt\n" + prompt)
+    for raw in args.prompt_file or []:
+        rel, content = validate_repo_file(repo, raw, "--prompt-file")
+        parts.append(f"# Prompt File: {rel}\n{content}")
+    for raw in args.evidence or []:
+        rel, content = validate_repo_file(repo, raw, "--evidence")
+        parts.append(f"# Evidence: {rel}\n{content}")
+    return "\n\n".join(parts)
+
+
+def review_scope_policy() -> str:
+    return """
+Review scope discipline:
+- This is a PR/branch closeout gate, not a broad redesign request.
+- Report only concrete defects introduced or exposed by this diff.
+- Prefer end-to-end failure evidence over isolated unit-level concerns when judging readiness.
+- Do not report style, cleanup, speculative hardening, or adjacent follow-up work as a finding.
+- If a correct fix requires a new public API, migration, protocol, storage contract, release-process change, or owner-boundary move, report the smallest changed line that proves the patch is not landable and explain the scope break.
+- If there are no actionable in-scope defects, return an empty findings array and mark the patch correct.
+""".strip()
+
+
+def build_prompt(repo: Path, target: str, target_ref: str | None, bundle: str, context: str) -> str:
+    target_line = f"{target} {target_ref}" if target_ref else target
+    return textwrap.dedent(
+        f"""
+        You are a senior code reviewer. Review the provided git change bundle only.
+
+        Hard rules:
+        - Return exactly one JSON object and nothing else. Do not wrap it in Markdown.
+        - The JSON object must match this schema exactly:
+        {json.dumps(SCHEMA, indent=2)}
+        - Do not modify files.
+        - Do not invoke nested reviewers or review tools.
+        - Shell commands, if available, must be read-only inspection commands.
+        - Do not run tests, formatters, package installs, generators, git mutation commands, or commands that write files.
+        - Report only actionable defects introduced or exposed by this change.
+        - Include security findings only for concrete exploitable risk, removed safety checks, or missing validation at a trust boundary.
+        - Use the smallest file/line location that demonstrates each issue.
+
+        Review target: {target_line}
+        Current branch: {current_branch(repo)}
+        Repository: {repo}
+
+        {review_scope_policy()}
+
+        {context}
+
+        # Change Bundle
+        {bundle}
+        """
+    ).strip()
+
+
+def write_json_temp(data: dict[str, Any]) -> Path:
+    handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+    with handle:
+        json.dump(data, handle)
+    return Path(handle.name)
+
+
+def run_codex(args: argparse.Namespace, repo: Path, prompt: str) -> str:
+    schema_path = write_json_temp(SCHEMA)
+    output_path = Path(tempfile.NamedTemporaryFile("w", suffix=".json", delete=False).name)
+    cmd = [resolve_command(args.codex_bin, repo), "--ask-for-approval", "never"]
+    if args.web_search:
+        cmd.append("--search")
+    if args.model:
+        cmd.extend(["--model", args.model])
+    if args.reasoning_effort:
+        cmd.extend(["-c", f'model_reasoning_effort="{args.reasoning_effort}"'])
+    cmd.extend(
+        [
+            "exec",
+            "--ephemeral",
+            "-C",
+            str(repo),
+            "-s",
+            "read-only",
+            "--output-schema",
+            str(schema_path),
+            "--output-last-message",
+            str(output_path),
+            "-",
+        ]
+    )
+    if args.stream:
+        print("codex command: " + " ".join(cmd[:-1]) + " -", file=sys.stderr)
+    try:
+        result = run(cmd, repo, input_text=prompt, timeout=args.timeout_seconds)
+    except subprocess.TimeoutExpired as exc:
+        raise ReviewError(f"codex timed out after {args.timeout_seconds}s", 4) from exc
+    try:
+        output = output_path.read_text(encoding="utf-8")
+    finally:
+        schema_path.unlink(missing_ok=True)
+        output_path.unlink(missing_ok=True)
+    if result.returncode != 0:
+        raise ReviewError(f"codex failed ({result.returncode})\n{result.stderr or result.stdout}", 4)
+    return output or result.stdout
+
+
+def parse_json_candidate(text: str) -> Any | None:
+    decoder = json.JSONDecoder()
+    parsed: Any | None = None
+    for index, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            candidate, _ = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(candidate, dict) and "findings" in candidate:
+            parsed = candidate
+    return parsed
+
+
+def extract_json(text: str) -> dict[str, Any]:
+    stripped = text.strip()
+    if not stripped:
+        raise ReviewError("Codex returned empty output", 4)
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        parsed = parse_json_candidate(stripped)
+    if isinstance(parsed, dict) and isinstance(parsed.get("structured_output"), dict):
+        parsed = parsed["structured_output"]
+    if isinstance(parsed, dict) and isinstance(parsed.get("result"), str):
+        parsed = parse_json_candidate(parsed["result"])
+    if isinstance(parsed, dict) and "findings" in parsed:
+        return parsed
+    raise ReviewError("Codex output did not contain the expected review JSON", 4)
+
+
+def number_in_range(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 1
+
+
+def validate_report(report: dict[str, Any], allowed_paths: set[str]) -> None:
+    expected_top = {"findings", "overall_correctness", "overall_explanation", "overall_confidence"}
+    if set(report) - expected_top:
+        raise ReviewError(f"review JSON has unexpected keys: {sorted(set(report) - expected_top)}", 4)
+    for key in expected_top:
+        if key not in report:
+            raise ReviewError(f"review JSON missing key: {key}", 4)
+    if not isinstance(report["findings"], list):
+        raise ReviewError("review JSON findings must be an array", 4)
+    if report["overall_correctness"] not in {"patch is correct", "patch is incorrect"}:
+        raise ReviewError("review JSON has invalid overall_correctness", 4)
+    if not isinstance(report["overall_explanation"], str) or not report["overall_explanation"]:
+        raise ReviewError("review JSON overall_explanation must be non-empty", 4)
+    if not number_in_range(report["overall_confidence"]):
+        raise ReviewError("review JSON overall_confidence must be numeric 0..1", 4)
+
+    kept: list[dict[str, Any]] = []
+    ignored_count = 0
+    for index, finding in enumerate(report["findings"]):
+        if not isinstance(finding, dict):
+            raise ReviewError(f"finding {index} must be an object", 4)
+        expected = {"title", "body", "priority", "confidence", "category", "code_location"}
+        if set(finding) - expected:
+            raise ReviewError(f"finding {index} has unexpected keys: {sorted(set(finding) - expected)}", 4)
+        for key in expected:
+            if key not in finding:
+                raise ReviewError(f"finding {index} missing key: {key}", 4)
+        if finding["priority"] not in {"P0", "P1", "P2", "P3"}:
+            raise ReviewError(f"finding {index} has invalid priority", 4)
+        if finding["category"] not in {"bug", "security", "regression", "test_gap", "maintainability"}:
+            raise ReviewError(f"finding {index} has invalid category", 4)
+        if not number_in_range(finding["confidence"]):
+            raise ReviewError(f"finding {index} has invalid confidence", 4)
+        location = finding["code_location"]
+        if not isinstance(location, dict):
+            raise ReviewError(f"finding {index} missing code_location", 4)
+        rel = str(location.get("file_path", "")).strip()
+        line = location.get("line")
+        if not rel or Path(rel).is_absolute() or ".." in Path(rel).parts or not isinstance(line, int) or line < 1:
+            raise ReviewError(f"finding {index} has invalid location", 4)
+        if rel not in allowed_paths:
+            print(f"ignored out-of-scope finding {index}: {finding.get('title', '<untitled>')} ({rel}:{line})", file=sys.stderr)
+            ignored_count += 1
+            continue
+        kept.append(finding)
+    report["findings"] = kept
+    if ignored_count and not kept and report["overall_correctness"] == "patch is incorrect":
+        report["overall_correctness"] = "patch is correct"
+        report["overall_explanation"] = bounded(report["overall_explanation"] + "\n\nOnly out-of-scope findings were reported.", 3000)
+
+
+def print_report(report: dict[str, Any]) -> str:
+    lines: list[str] = []
+    findings = report["findings"]
+    if findings:
+        lines.append(f"codex-pr-review findings: {len(findings)}")
+    elif report["overall_correctness"] == "patch is incorrect":
+        lines.append("codex-pr-review verdict: patch is incorrect without discrete findings")
+    else:
+        lines.append("codex-pr-review clean: no actionable findings reported")
+    for finding in findings:
+        loc = finding["code_location"]
+        lines.extend(
+            [
+                "",
+                f"[{finding['priority']}] {finding['title']}",
+                f"{loc['file_path']}:{loc['line']}",
+                finding["body"],
+            ]
+        )
+    lines.extend(["", f"overall: {report['overall_correctness']} ({report['overall_confidence']})", report["overall_explanation"]])
+    return "\n".join(lines) + "\n"
+
+
+def start_parallel_tests(command: str, repo: Path, shell_kind: str) -> tuple[subprocess.Popen[Any], float]:
+    print(f"parallel tests: {command}")
+    if shell_kind == "default":
+        return subprocess.Popen(command, cwd=repo, shell=True), time.time()
+    if shell_kind in {"bash", "zsh"}:
+        shell = resolve_command(shell_kind, repo)
+        return subprocess.Popen([shell, "-lc", command], cwd=repo), time.time()
+    if shell_kind == "pwsh":
+        shell = resolve_command("pwsh", repo)
+        return subprocess.Popen([shell, "-NoProfile", "-Command", command], cwd=repo), time.time()
+    raise ReviewError(f"unsupported parallel test shell: {shell_kind}", 3)
+
+
+def finish_parallel_tests(proc: subprocess.Popen[Any], started: float) -> int:
+    proc.wait()
+    print(f"parallel tests exit: {proc.returncode} after {int(time.time() - started)}s")
+    return int(proc.returncode or 0)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Codex-native PR/branch closeout review.")
+    parser.add_argument("--mode", choices=["auto", "local", "uncommitted", "branch", "commit"], default="auto")
+    parser.add_argument("--base")
+    parser.add_argument("--commit", default="HEAD")
+    parser.add_argument("--codex-bin", default=os.environ.get("CODEX_BIN", "codex"))
+    parser.add_argument("--model")
+    parser.add_argument("--reasoning-effort", choices=["minimal", "low", "medium", "high"])
+    parser.add_argument("--prompt", action="append")
+    parser.add_argument("--prompt-file", action="append")
+    parser.add_argument("--evidence", action="append")
+    parser.add_argument("--json-output")
+    parser.add_argument("--bundle-output")
+    parser.add_argument("--output")
+    parser.add_argument("--parallel-tests")
+    parser.add_argument("--parallel-tests-shell", choices=["default", "bash", "zsh", "pwsh"], default="default")
+    parser.add_argument("--web-search", action="store_true")
+    parser.add_argument("--stream", action="store_true")
+    parser.add_argument("--timeout-seconds", type=int, default=1800)
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--self-test", action="store_true")
+    args = parser.parse_args()
+    if args.timeout_seconds <= 0:
+        parser.error("--timeout-seconds must be positive")
+    return args
+
+
+def self_test() -> int:
+    clean = {
+        "findings": [
+            {
+                "title": "Valid",
+                "body": "A body",
+                "priority": "P2",
+                "confidence": 0.9,
+                "category": "bug",
+                "code_location": {"file_path": "changed.py", "line": 1},
+            },
+            {
+                "title": "Outside",
+                "body": "Ignored",
+                "priority": "P3",
+                "confidence": 0.5,
+                "category": "maintainability",
+                "code_location": {"file_path": "other.py", "line": 2},
+            },
+        ],
+        "overall_correctness": "patch is incorrect",
+        "overall_explanation": "test",
+        "overall_confidence": 0.8,
+    }
+    validate_report(clean, {"changed.py"})
+    assert len(clean["findings"]) == 1
+    assert extract_json("prefix " + json.dumps(clean))["findings"]
+    assert secret_text_risk("token=" + "abcdefghijklmnopqrstuvwxyz")
+    assert not secret_text_risk("ordinary review text")
+    assert bounded("abc", 2).endswith("[truncated at 2 characters]\n")
+    print("codex-pr-review self-test passed")
+    return 0
+
+
+def main() -> int:
+    args = parse_args()
+    if args.self_test:
+        return self_test()
+    try:
+        repo = repo_root()
+        target, target_ref = choose_target(repo, args.mode, args.base)
+        print(f"codex-pr-review target: {target}")
+        print(f"branch: {current_branch(repo)}")
+        if target_ref:
+            print(f"ref: {target_ref}")
+        if target == "local":
+            bundle = local_bundle(repo)
+        elif target == "branch":
+            assert target_ref
+            bundle = branch_bundle(repo, target_ref)
+        else:
+            bundle = commit_bundle(repo, args.commit)
+            target_ref = args.commit
+        allowed_paths = changed_paths(repo, target, target_ref, args.commit)
+        context = extra_context(args, repo)
+        prompt = build_prompt(repo, target, target_ref, bundle, context)
+        print(f"bundle: {len(prompt)} chars")
+        if args.bundle_output:
+            Path(args.bundle_output).write_text(prompt + "\n", encoding="utf-8")
+        if args.dry_run:
+            return 0
+
+        tests_proc = start_parallel_tests(args.parallel_tests, repo, args.parallel_tests_shell) if args.parallel_tests else None
+        try:
+            raw = run_codex(args, repo, prompt)
+            report = extract_json(raw)
+            validate_report(report, allowed_paths)
+            if args.json_output:
+                Path(args.json_output).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+            text = print_report(report)
+            print(text, end="")
+            if args.output:
+                Path(args.output).write_text(text, encoding="utf-8")
+        finally:
+            tests_status = finish_parallel_tests(*tests_proc) if tests_proc else 0
+
+        has_review_failure = bool(report["findings"]) or report["overall_correctness"] == "patch is incorrect"
+        if has_review_failure:
+            return 1
+        if tests_status:
+            return 2
+        return 0
+    except ReviewError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return exc.code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
