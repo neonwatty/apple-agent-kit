@@ -66,7 +66,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: neonwatty/apple-agent-kit
-          ref: codex/manual-remote-pr-session
+          ref: main
           path: .aak/apple-agent-kit
 
       - name: Validate pull request SHA and write request
