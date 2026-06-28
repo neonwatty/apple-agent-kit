@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/apple-agent-kit/manual-remote-pr-session.job-request.schema.json",
+  "title": "Apple Agent Kit Manual Remote PR Session Job Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "requestId",
+    "requestedAt",
+    "repository",
+    "pullRequest",
+    "git",
+    "target",
+    "actions",
+    "evidencePolicy",
+    "gates",
+    "requester",
+    "validation"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "actions": {
+            "type": "object",
+            "required": ["physicalDevice"],
+            "properties": {
+              "physicalDevice": { "const": true }
+            }
+          }
+        },
+        "required": ["actions"]
+      },
+      "then": {
+        "properties": {
+          "gates": {
+            "type": "object",
+            "required": ["physicalDeviceApproval", "approvalRef"],
+            "properties": {
+              "physicalDeviceApproval": { "const": "explicit-private-approval" },
+              "approvalRef": { "type": "string", "minLength": 1, "maxLength": 256 }
+            }
+          }
+        },
+        "required": ["gates"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "actions": {
+            "type": "object",
+            "required": ["physicalDevice"],
+            "properties": {
+              "physicalDevice": { "const": false }
+            }
+          }
+        },
+        "required": ["actions"]
+      },
+      "then": {
+        "properties": {
+          "gates": {
+            "type": "object",
+            "required": ["physicalDeviceApproval", "approvalRef"],
+            "properties": {
+              "physicalDeviceApproval": { "const": "disabled" },
+              "approvalRef": { "const": "" }
+            }
+          }
+        },
+        "required": ["gates"]
+      }
+    }
+  ],
+  "properties": {
+    "schemaVersion": { "const": "manual-remote-pr-session/v1" },
+    "kind": { "const": "manual-remote-pr-session.job-request" },
+    "requestId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+    "requestedAt": { "type": "string", "format": "date-time" },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fullName", "htmlUrl"],
+      "properties": {
+        "fullName": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+        "htmlUrl": { "type": "string" }
+      }
+    },
+    "pullRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "htmlUrl", "baseRef", "headRef"],
+      "properties": {
+        "number": { "type": "integer", "minimum": 1 },
+        "htmlUrl": { "type": "string" },
+        "baseRef": { "type": "string", "minLength": 1 },
+        "headRef": { "type": "string", "minLength": 1 }
+      }
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha"],
+      "properties": {
+        "sha": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostProfileAlias", "runProfile"],
+      "properties": {
+        "hostProfileAlias": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+        "runProfile": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" }
+      }
+    },
+    "actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runTests", "launchApp", "createCodexSession", "physicalDevice"],
+      "properties": {
+        "runTests": { "type": "boolean" },
+        "launchApp": { "type": "boolean" },
+        "createCodexSession": { "type": "boolean" },
+        "physicalDevice": { "type": "boolean" }
+      }
+    },
+    "codexSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "instructions": { "type": "string", "maxLength": 4000 }
+      }
+    },
+    "evidencePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifactMode", "allowedArtifactGlobs"],
+      "properties": {
+        "artifactMode": { "enum": ["receipt-only", "allowlist"] },
+        "allowedArtifactGlobs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "maxItems": 50
+        }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["physicalDeviceApproval", "approvalRef"],
+      "properties": {
+        "physicalDeviceApproval": { "enum": ["disabled", "explicit-private-approval"] },
+        "approvalRef": { "type": "string", "maxLength": 256 }
+      }
+    },
+    "requester": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor", "workflowRunId", "workflowRunAttempt"],
+      "properties": {
+        "actor": { "type": "string", "minLength": 1 },
+        "workflowRunId": { "type": "string", "minLength": 1 },
+        "workflowRunAttempt": { "type": "string", "minLength": 1 }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "validatedAt", "validator"],
+      "properties": {
+        "status": { "const": "validated" },
+        "validatedAt": { "type": "string", "format": "date-time" },
+        "validator": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

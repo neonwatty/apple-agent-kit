@@ -69,3 +69,52 @@ Review rendered workflows before copying them into a private repository.
 - `ci.macosRunner` is for hosted or generic macOS CI templates that use a single `runs-on` value.
 - `ci.macosRunnerLabels` is for self-hosted Mac runner-health workflows that use label arrays.
 - `ci.physicalRunnerLabels` is for physical iOS workflows and should stay separate from device-free Mac runner health checks.
+
+## Manual Remote PR Session Fields
+
+Manual remote PR sessions let a developer enqueue a validated request from GitHub, then let a predefined private Mac pull and accept that request. The public adapter shape is only a contract; repo-specific commands, local paths, tokens, host identities, and product launch details stay in private adapters.
+
+Recommended private adapter section:
+
+```json
+{
+  "manualRemotePrSession": {
+    "enabled": false,
+    "queueProvider": "github-actions-artifact",
+    "hostProfiles": [
+      {
+        "alias": "example-mac",
+        "acceptedRunProfiles": ["unit-tests", "ui-smoke"],
+        "allowLaunchApp": true,
+        "allowCodexSession": true,
+        "physicalDeviceDefault": false
+      }
+    ],
+    "runProfiles": [
+      {
+        "id": "unit-tests",
+        "commands": [
+          {
+            "id": "test",
+            "command": "make test",
+            "timeoutMinutes": 30
+          }
+        ],
+        "artifactPolicy": {
+          "mode": "receipt-only",
+          "allowedGlobs": []
+        }
+      }
+    ]
+  }
+}
+```
+
+Contract rules:
+
+- `enabled` must default to `false` until a private poller, queue allowlist, and receipt publication path are installed.
+- `queueProvider` is `github-actions-artifact` for v1. The remote Mac polls GitHub for validated job-request artifacts; it does not expose an inbound LAN webhook.
+- `hostProfiles[].alias` is a stable, sanitized alias. Do not publish hostnames, serial numbers, local usernames, device names, or network addresses.
+- `runProfiles[].commands` are private allowlisted commands. Workflow inputs must never provide arbitrary shell commands.
+- `allowLaunchApp` and `allowCodexSession` are separate gates. A test-only job must not implicitly launch the app or start an agent session.
+- `physicalDeviceDefault` must remain `false`. Physical iPhone support is a gated extension that requires a separate approval reference, private device policy, and stricter evidence controls.

@@ -1,0 +1,213 @@
+name: Apple Agent Kit Manual Remote PR Session
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to validate and enqueue
+        required: true
+        type: string
+      sha:
+        description: Exact commit SHA from that pull request
+        required: true
+        type: string
+      host_profile_alias:
+        description: Sanitized private host profile alias
+        required: true
+        type: string
+      run_profile:
+        description: Private adapter run profile ID
+        required: true
+        default: unit-tests
+        type: string
+      launch_app:
+        description: Ask the private adapter to launch the app after tests
+        required: true
+        default: false
+        type: boolean
+      create_codex_session:
+        description: Ask the private adapter to create a local Codex session
+        required: true
+        default: false
+        type: boolean
+      codex_instructions:
+        description: Optional custom instructions for the local Codex session
+        required: false
+        default: ""
+        type: string
+      artifact_mode:
+        description: Receipt-only by default; allowlist requires private adapter approval
+        required: true
+        default: receipt-only
+        type: choice
+        options:
+          - receipt-only
+          - allowlist
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: manual-remote-pr-session-${{ github.event.inputs.pr_number }}-${{ github.event.inputs.sha }}
+  cancel-in-progress: false
+
+jobs:
+  enqueue:
+    name: validate and enqueue
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Checkout Apple Agent Kit
+        uses: actions/checkout@v6
+        with:
+          repository: neonwatty/apple-agent-kit
+          ref: main
+          path: .aak/apple-agent-kit
+
+      - name: Validate pull request SHA and write request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.inputs.pr_number }}
+          REQUESTED_SHA: ${{ github.event.inputs.sha }}
+          HOST_PROFILE_ALIAS: ${{ github.event.inputs.host_profile_alias }}
+          RUN_PROFILE: ${{ github.event.inputs.run_profile }}
+          LAUNCH_APP: ${{ github.event.inputs.launch_app }}
+          CREATE_CODEX_SESSION: ${{ github.event.inputs.create_codex_session }}
+          CODEX_INSTRUCTIONS: ${{ github.event.inputs.codex_instructions }}
+          ARTIFACT_MODE: ${{ github.event.inputs.artifact_mode }}
+          REQUESTER: ${{ github.actor }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/manual-remote-pr-session
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          safe_id = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+          sha_re = re.compile(r"^[0-9a-fA-F]{40}$")
+
+          repo = os.environ["REPOSITORY"]
+          pr_number = os.environ["PR_NUMBER"]
+          sha = os.environ["REQUESTED_SHA"].lower()
+          host_alias = os.environ["HOST_PROFILE_ALIAS"]
+          run_profile = os.environ["RUN_PROFILE"]
+
+          if not pr_number.isdigit() or int(pr_number) < 1:
+              raise SystemExit("pr_number must be a positive integer")
+          if not sha_re.fullmatch(sha):
+              raise SystemExit("sha must be a 40-character commit SHA")
+          for label, value in (("host_profile_alias", host_alias), ("run_profile", run_profile)):
+              if not safe_id.fullmatch(value):
+                  raise SystemExit(f"{label} must be a sanitized identifier")
+
+          def gh_json(*args):
+              completed = subprocess.run(
+                  ["gh", "api", *args],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              )
+              return json.loads(completed.stdout)
+
+          pr = gh_json(f"repos/{repo}/pulls/{pr_number}")
+          commit_pages = gh_json(f"repos/{repo}/pulls/{pr_number}/commits", "--paginate", "--slurp")
+          if commit_pages and isinstance(commit_pages[0], list):
+              commits = [commit for page in commit_pages for commit in page]
+          else:
+              commits = commit_pages
+          commit_shas = {commit["sha"].lower() for commit in commits}
+          if sha not in commit_shas:
+              raise SystemExit(f"sha {sha} is not in PR #{pr_number}")
+
+          now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+          run_id = os.environ["WORKFLOW_RUN_ID"]
+          run_attempt = os.environ["WORKFLOW_RUN_ATTEMPT"]
+          request_id = f"mprs-{run_id}-{run_attempt}"
+
+          request = {
+              "schemaVersion": "manual-remote-pr-session/v1",
+              "kind": "manual-remote-pr-session.job-request",
+              "requestId": request_id,
+              "requestedAt": now,
+              "repository": {
+                  "fullName": repo,
+                  "htmlUrl": f"https://github.com/{repo}",
+              },
+              "pullRequest": {
+                  "number": int(pr_number),
+                  "htmlUrl": pr["html_url"],
+                  "baseRef": pr["base"]["ref"],
+                  "headRef": pr["head"]["ref"],
+              },
+              "git": {
+                  "sha": sha,
+              },
+              "target": {
+                  "hostProfileAlias": host_alias,
+                  "runProfile": run_profile,
+              },
+              "actions": {
+                  "runTests": True,
+                  "launchApp": os.environ["LAUNCH_APP"] == "true",
+                  "createCodexSession": os.environ["CREATE_CODEX_SESSION"] == "true",
+                  "physicalDevice": False,
+              },
+              "codexSession": {
+                  "instructions": os.environ.get("CODEX_INSTRUCTIONS", ""),
+              },
+              "evidencePolicy": {
+                  "artifactMode": os.environ["ARTIFACT_MODE"],
+                  "allowedArtifactGlobs": [],
+              },
+              "gates": {
+                  "physicalDeviceApproval": "disabled",
+                  "approvalRef": "",
+              },
+              "requester": {
+                  "actor": os.environ["REQUESTER"],
+                  "workflowRunId": run_id,
+                  "workflowRunAttempt": run_attempt,
+              },
+              "validation": {
+                  "status": "validated",
+                  "validatedAt": now,
+                  "validator": "apple-agent-kit",
+              },
+          }
+
+          path = Path("artifacts/manual-remote-pr-session/job-request.json")
+          path.write_text(json.dumps(request, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(f"wrote {path}")
+          PY
+
+      - name: Validate job request contract
+        run: |
+          set -euo pipefail
+          python3 .aak/apple-agent-kit/scripts/aak.py validate-manual-remote-job \
+            artifacts/manual-remote-pr-session/job-request.json \
+            --json
+
+      - name: Upload pull-queue job request
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-remote-pr-session-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/manual-remote-pr-session/job-request.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Pull-based execution assertion
+        run: |
+          set -euo pipefail
+          echo "This workflow only uploads a validated job request. A private remote Mac poller must pull, accept, execute, and publish a sanitized receipt."

@@ -22,12 +22,20 @@ REQUIRED_FILES = [
     "README.md",
     "docs/adapter-contract.md",
     "docs/install.md",
+    "docs/manual-remote-pr-session.md",
     "docs/privacy-safe-evidence.md",
     "docs/private-adapter-rollout-checklist.md",
+    "docs/slim-codex-autoreview.md",
     "docs/proof-records/index.md",
     "docs/v0-release-readiness.md",
     "scripts/aak.py",
+    "skills/codex-autoreview/SKILL.md",
+    "schemas/manual-remote-pr-session.job-request.schema.json",
+    "schemas/manual-remote-pr-session.receipt.schema.json",
     "templates/adapter.example.json",
+    "templates/github-actions/manual-remote-pr-session.yml",
+    "templates/manual-remote-pr-session.job-request.example.json",
+    "templates/manual-remote-pr-session.receipt.example.json",
 ]
 
 PROOF_RECORDS = [
@@ -44,7 +52,7 @@ FORBIDDEN_TEXT = [
     re.compile(r"sk-[A-Za-z0-9]{20,}"),
     re.compile(r"xox[baprs]-[A-Za-z0-9-]{20,}"),
     re.compile(re.escape("/Users/" + "neonwatty/")),
-    re.compile("mac-" + "mini-2", re.IGNORECASE),
+    re.compile("mac" + r"[- ]?mini[- ]?2", re.IGNORECASE),
 ]
 
 FORBIDDEN_PATH_PARTS = {
@@ -123,6 +131,8 @@ def check_manifests() -> None:
 
 def check_cli() -> None:
     run(["python3", "scripts/aak.py", "validate-adapter", "templates/adapter.example.json", "--json"])
+    run(["python3", "scripts/aak.py", "validate-manual-remote-job", "templates/manual-remote-pr-session.job-request.example.json", "--json"])
+    run(["python3", "scripts/aak.py", "validate-manual-remote-receipt", "templates/manual-remote-pr-session.receipt.example.json", "--json"])
     run(["python3", "scripts/aak.py", "inspect", "--repo", ".", "--adapter", "templates/adapter.example.json", "--json"])
     with tempfile.TemporaryDirectory(prefix="aak-release-render-") as output:
         completed = run(

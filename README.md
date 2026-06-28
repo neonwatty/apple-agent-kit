@@ -43,6 +43,8 @@ python3 scripts/aak.py validate-adapter templates/adapter.example.json
 python3 scripts/aak.py render-workflows --adapter templates/adapter.example.json --output /tmp/aak-render --force
 python3 scripts/aak.py check-xcode --json
 python3 scripts/aak.py summarize-xcresult path/to/TestResults.xcresult --json
+python3 scripts/aak.py validate-manual-remote-job templates/manual-remote-pr-session.job-request.example.json --json
+python3 scripts/aak.py validate-manual-remote-receipt templates/manual-remote-pr-session.receipt.example.json --json
 ```
 
 These commands do not install apps, boot simulators, start WDA, launch host apps, dispatch CI workflows, or touch physical devices.
@@ -56,6 +58,10 @@ The rendered workflow set includes device-free eligibility templates:
 Bind the self-hosted Mac lanes with private `ci.macosRunnerLabels`; keep physical iPhone workflows behind a separate approval gate.
 
 See [Adopting the macOS CI Eligibility Lane](docs/adopting-macos-ci-eligibility.md), [Adopting the iOS CI Eligibility Lane](docs/adopting-ios-ci-eligibility.md), [Self-Hosted Runner Scope and Onboarding](docs/self-hosted-runner-scope-onboarding.md), the [Dedicated Mac Runner-Health Checklist](docs/dedicated-mac-runner-health-checklist.md), and the [Private Adapter Rollout Checklist](docs/private-adapter-rollout-checklist.md) for a repeatable public/private adoption path. Public proof records are indexed in [Proof Records](docs/proof-records/index.md).
+
+For manually requested remote Mac checks from a PR, see [Manual Remote PR Session](docs/manual-remote-pr-session.md). The public workflow only emits a validated pull-queue job request; private adapters decide which host accepts it, which commands run, whether an app launch is allowed, and whether a local Codex-assisted manual testing session is created.
+
+For PR closeout review, see [Slim Codex Autoreview](docs/slim-codex-autoreview.md) and the `codex-autoreview` skill. The design keeps review Codex-native, scope-limited, and advisory.
 
 For release gating, use [v0 Release Readiness](docs/v0-release-readiness.md).
 

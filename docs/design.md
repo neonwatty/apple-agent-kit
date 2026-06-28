@@ -22,8 +22,12 @@ The v0 command entrypoint is `scripts/aak.py`. It is intentionally dependency-fr
 - `render-workflows`
 - `check-xcode`
 - `summarize-xcresult`
+- `validate-manual-remote-job`
+- `validate-manual-remote-receipt`
 
 The device-free self-hosted Mac runner-health and macOS eligibility templates render from `ci.macosRunnerLabels`. The iOS eligibility template defaults to a hosted macOS runner from `ci.macosRunner` and keeps simulator inventory read-only. Keep these separate from physical iOS runner labels so an eligibility check does not imply install, WDA, screenshots, app launch, UI smoke, simulator boot, or physical-device smoke.
+
+Manual Remote PR Session is the first pull-based remote hardware contract. Its public workflow validates a PR/SHA request and uploads a job-request artifact. Private pollers and adapters make all execution decisions, including host acceptance, checkout path, command allowlist, app launch, Codex-session bridge, artifact policy, and receipt publication.
 
 ## Initial Skill Set
 
@@ -34,6 +38,7 @@ The device-free self-hosted Mac runner-health and macOS eligibility templates re
 - `ios-physical-device`: physical iPhone preflight, install, WDA/Appium readiness, and UI smoke.
 - `xcresult-proof`: parse `xcresult` bundles, summarize failures, coverage, and artifacts.
 - `privacy-safe-evidence`: enforce evidence redaction and screenshot boundaries.
+- `codex-autoreview`: perform a scoped Codex-native branch/PR closeout review before commit, PR, or merge.
 
 ## Adapter Model
 

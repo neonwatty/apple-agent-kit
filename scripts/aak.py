@@ -19,6 +19,29 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_DIR = ROOT / "templates" / "github-actions"
 SECRET_KEY_RE = re.compile(r"(token|secret|password|api[_-]?key|private[_-]?key)", re.I)
+SAFE_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+REPO_FULL_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+RFC3339_DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$")
+FORBIDDEN_CONTRACT_TEXT = [
+    re.compile("BEGIN " + r"(RSA |OPENSSH |EC |DSA )?" + "PRIVATE " + "KEY"),
+    re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}"),
+    re.compile(r"sk-[A-Za-z0-9]{20,}"),
+    re.compile(r"xox[baprs]-[A-Za-z0-9-]{20,}"),
+    re.compile(re.escape("/Users/")),
+]
+FORBIDDEN_RECEIPT_KEYS = {
+    "deviceUdid",
+    "hostName",
+    "hostname",
+    "localPath",
+    "rawLog",
+    "rawLogs",
+    "serialNumber",
+    "stderr",
+    "stdout",
+    "udid",
+}
 IGNORED_DIRS = {
     ".git",
     ".goalbuddy-board",
@@ -86,6 +109,348 @@ def validate_adapter_data(adapter: dict[str, Any]) -> list[str]:
     return errors
 
 
+def require_object(parent: dict[str, Any], key: str, errors: list[str], path: str) -> dict[str, Any]:
+    value = parent.get(key)
+    if not isinstance(value, dict):
+        errors.append(f"{path}.{key} must be an object")
+        return {}
+    return value
+
+
+def require_string(parent: dict[str, Any], key: str, errors: list[str], path: str, *, allow_empty: bool = False) -> str:
+    value = parent.get(key)
+    if not isinstance(value, str) or (not allow_empty and not value):
+        errors.append(f"{path}.{key} must be a non-empty string")
+        return ""
+    return value
+
+
+def require_bool(parent: dict[str, Any], key: str, errors: list[str], path: str) -> bool:
+    value = parent.get(key)
+    if not isinstance(value, bool):
+        errors.append(f"{path}.{key} must be a boolean")
+        return False
+    return value
+
+
+def is_integer(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def reject_unknown_keys(value: dict[str, Any], allowed: set[str], errors: list[str], path: str) -> None:
+    for key in sorted(set(value) - allowed):
+        errors.append(f"{path}.{key} is not allowed")
+
+
+def require_datetime_string(parent: dict[str, Any], key: str, errors: list[str], path: str) -> str:
+    value = require_string(parent, key, errors, path)
+    if not value:
+        return ""
+    if not RFC3339_DATETIME_RE.fullmatch(value):
+        errors.append(f"{path}.{key} must be an RFC3339 date-time")
+        return value
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        errors.append(f"{path}.{key} must be an RFC3339 date-time")
+    return value
+
+
+def validate_safe_id(value: str, field: str, errors: list[str]) -> None:
+    if not SAFE_ID_RE.fullmatch(value):
+        errors.append(f"{field} must be a sanitized identifier")
+
+
+def validate_common_remote_pr_fields(data: dict[str, Any], errors: list[str]) -> None:
+    request_id = require_string(data, "requestId", errors, "root")
+    if request_id:
+        validate_safe_id(request_id, "requestId", errors)
+
+    repository = require_object(data, "repository", errors, "root")
+    reject_unknown_keys(repository, {"fullName", "htmlUrl"}, errors, "repository")
+    full_name = require_string(repository, "fullName", errors, "repository")
+    if full_name and not REPO_FULL_NAME_RE.fullmatch(full_name):
+        errors.append("repository.fullName must look like owner/repo")
+    require_string(repository, "htmlUrl", errors, "repository")
+
+    pull_request = require_object(data, "pullRequest", errors, "root")
+    pr_number = pull_request.get("number")
+    if not is_integer(pr_number) or pr_number < 1:
+        errors.append("pullRequest.number must be a positive integer")
+    require_string(pull_request, "htmlUrl", errors, "pullRequest")
+
+    git = require_object(data, "git", errors, "root")
+    reject_unknown_keys(git, {"sha"}, errors, "git")
+    sha = require_string(git, "sha", errors, "git")
+    if sha and not SHA_RE.fullmatch(sha):
+        errors.append("git.sha must be a 40-character commit SHA")
+
+
+def collect_forbidden_contract_values(value: Any, errors: list[str], path: str = "root") -> None:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if key in FORBIDDEN_RECEIPT_KEYS or SECRET_KEY_RE.search(key):
+                errors.append(f"{path}.{key} is not allowed in sanitized manual remote session data")
+            collect_forbidden_contract_values(nested, errors, f"{path}.{key}")
+    elif isinstance(value, list):
+        for index, nested in enumerate(value):
+            collect_forbidden_contract_values(nested, errors, f"{path}[{index}]")
+    elif isinstance(value, str):
+        for pattern in FORBIDDEN_CONTRACT_TEXT:
+            if pattern.search(value):
+                errors.append(f"{path} appears to contain private or secret material")
+                break
+
+
+def validate_manual_remote_job_data(job: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    collect_forbidden_contract_values(job, errors)
+    reject_unknown_keys(
+        job,
+        {
+            "schemaVersion",
+            "kind",
+            "requestId",
+            "requestedAt",
+            "repository",
+            "pullRequest",
+            "git",
+            "target",
+            "actions",
+            "codexSession",
+            "evidencePolicy",
+            "gates",
+            "requester",
+            "validation",
+        },
+        errors,
+        "root",
+    )
+
+    if job.get("schemaVersion") != "manual-remote-pr-session/v1":
+        errors.append("schemaVersion must be manual-remote-pr-session/v1")
+    if job.get("kind") != "manual-remote-pr-session.job-request":
+        errors.append("kind must be manual-remote-pr-session.job-request")
+    require_datetime_string(job, "requestedAt", errors, "root")
+    validate_common_remote_pr_fields(job, errors)
+
+    pull_request = job.get("pullRequest") if isinstance(job.get("pullRequest"), dict) else {}
+    reject_unknown_keys(pull_request, {"number", "htmlUrl", "baseRef", "headRef"}, errors, "pullRequest")
+    require_string(pull_request, "baseRef", errors, "pullRequest")
+    require_string(pull_request, "headRef", errors, "pullRequest")
+
+    target = require_object(job, "target", errors, "root")
+    reject_unknown_keys(target, {"hostProfileAlias", "runProfile"}, errors, "target")
+    host_alias = require_string(target, "hostProfileAlias", errors, "target")
+    run_profile = require_string(target, "runProfile", errors, "target")
+    if host_alias:
+        validate_safe_id(host_alias, "target.hostProfileAlias", errors)
+    if run_profile:
+        validate_safe_id(run_profile, "target.runProfile", errors)
+
+    actions = require_object(job, "actions", errors, "root")
+    reject_unknown_keys(actions, {"runTests", "launchApp", "createCodexSession", "physicalDevice"}, errors, "actions")
+    require_bool(actions, "runTests", errors, "actions")
+    require_bool(actions, "launchApp", errors, "actions")
+    require_bool(actions, "createCodexSession", errors, "actions")
+    physical_device = require_bool(actions, "physicalDevice", errors, "actions")
+    if "commands" in job:
+        errors.append("job requests must not contain commands; commands come from private adapters")
+
+    codex_session = job.get("codexSession")
+    if codex_session is not None:
+        if not isinstance(codex_session, dict):
+            errors.append("codexSession must be an object when present")
+        else:
+            reject_unknown_keys(codex_session, {"instructions"}, errors, "codexSession")
+            instructions = codex_session.get("instructions", "")
+            if not isinstance(instructions, str):
+                errors.append("codexSession.instructions must be a string")
+            elif len(instructions) > 4000:
+                errors.append("codexSession.instructions must be 4000 characters or fewer")
+
+    evidence = require_object(job, "evidencePolicy", errors, "root")
+    reject_unknown_keys(evidence, {"artifactMode", "allowedArtifactGlobs"}, errors, "evidencePolicy")
+    artifact_mode = require_string(evidence, "artifactMode", errors, "evidencePolicy")
+    if artifact_mode and artifact_mode not in {"receipt-only", "allowlist"}:
+        errors.append("evidencePolicy.artifactMode must be receipt-only or allowlist")
+    allowed_globs = evidence.get("allowedArtifactGlobs")
+    if not isinstance(allowed_globs, list) or not all(isinstance(item, str) and item for item in allowed_globs):
+        errors.append("evidencePolicy.allowedArtifactGlobs must be a list of non-empty strings")
+    if artifact_mode == "receipt-only" and allowed_globs:
+        errors.append("receipt-only jobs must not request allowed artifacts")
+
+    gates = require_object(job, "gates", errors, "root")
+    reject_unknown_keys(gates, {"physicalDeviceApproval", "approvalRef"}, errors, "gates")
+    approval = require_string(gates, "physicalDeviceApproval", errors, "gates")
+    approval_ref = require_string(gates, "approvalRef", errors, "gates", allow_empty=True)
+    if approval and approval not in {"disabled", "explicit-private-approval"}:
+        errors.append("gates.physicalDeviceApproval must be disabled or explicit-private-approval")
+    if physical_device and (approval != "explicit-private-approval" or not approval_ref):
+        errors.append("physical-device jobs require explicit-private-approval and a non-empty approvalRef")
+    if not physical_device and approval != "disabled":
+        errors.append("physical-device approval must be disabled when actions.physicalDevice is false")
+
+    requester = require_object(job, "requester", errors, "root")
+    reject_unknown_keys(requester, {"actor", "workflowRunId", "workflowRunAttempt"}, errors, "requester")
+    require_string(requester, "actor", errors, "requester")
+    require_string(requester, "workflowRunId", errors, "requester")
+    require_string(requester, "workflowRunAttempt", errors, "requester")
+
+    validation = require_object(job, "validation", errors, "root")
+    reject_unknown_keys(validation, {"status", "validatedAt", "validator"}, errors, "validation")
+    if validation.get("status") != "validated":
+        errors.append("validation.status must be validated")
+    require_datetime_string(validation, "validatedAt", errors, "validation")
+    require_string(validation, "validator", errors, "validation")
+
+    return errors
+
+
+def validate_manual_remote_receipt_data(receipt: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    collect_forbidden_contract_values(receipt, errors)
+    reject_unknown_keys(
+        receipt,
+        {
+            "schemaVersion",
+            "kind",
+            "requestId",
+            "repository",
+            "pullRequest",
+            "git",
+            "hostProfileAlias",
+            "startedAt",
+            "completedAt",
+            "result",
+            "commands",
+            "launch",
+            "codexSession",
+            "physicalDevice",
+            "artifacts",
+            "redactions",
+        },
+        errors,
+        "root",
+    )
+
+    if receipt.get("schemaVersion") != "manual-remote-pr-session/v1":
+        errors.append("schemaVersion must be manual-remote-pr-session/v1")
+    if receipt.get("kind") != "manual-remote-pr-session.receipt":
+        errors.append("kind must be manual-remote-pr-session.receipt")
+    validate_common_remote_pr_fields(receipt, errors)
+
+    pull_request = receipt.get("pullRequest") if isinstance(receipt.get("pullRequest"), dict) else {}
+    reject_unknown_keys(pull_request, {"number", "htmlUrl"}, errors, "pullRequest")
+    host_alias = require_string(receipt, "hostProfileAlias", errors, "root")
+    if host_alias:
+        validate_safe_id(host_alias, "hostProfileAlias", errors)
+    require_datetime_string(receipt, "startedAt", errors, "root")
+    require_datetime_string(receipt, "completedAt", errors, "root")
+    result = require_string(receipt, "result", errors, "root")
+    if result and result not in {"succeeded", "failed", "canceled", "rejected", "timed-out"}:
+        errors.append("result must be succeeded, failed, canceled, rejected, or timed-out")
+
+    commands = receipt.get("commands")
+    if not isinstance(commands, list):
+        errors.append("commands must be a list")
+    else:
+        for index, command in enumerate(commands):
+            path = f"commands[{index}]"
+            if not isinstance(command, dict):
+                errors.append(f"{path} must be an object")
+                continue
+            reject_unknown_keys(command, {"id", "class", "summary", "durationSeconds", "exitCode", "result"}, errors, path)
+            command_id = require_string(command, "id", errors, path)
+            if command_id:
+                validate_safe_id(command_id, f"{path}.id", errors)
+            command_class = require_string(command, "class", errors, path)
+            if command_class:
+                validate_safe_id(command_class, f"{path}.class", errors)
+            summary = require_string(command, "summary", errors, path)
+            if summary and len(summary) > 240:
+                errors.append(f"{path}.summary must be 240 characters or fewer")
+            duration = command.get("durationSeconds")
+            if not is_number(duration) or duration < 0:
+                errors.append(f"{path}.durationSeconds must be a non-negative number")
+            if not is_integer(command.get("exitCode")):
+                errors.append(f"{path}.exitCode must be an integer")
+            command_result = require_string(command, "result", errors, path)
+            if command_result and command_result not in {"succeeded", "failed", "canceled", "skipped", "timed-out"}:
+                errors.append(f"{path}.result has an unsupported value")
+
+    launch = require_object(receipt, "launch", errors, "root")
+    reject_unknown_keys(launch, {"requested", "result"}, errors, "launch")
+    require_bool(launch, "requested", errors, "launch")
+    launch_result = require_string(launch, "result", errors, "launch")
+    if launch_result and launch_result not in {"not-requested", "succeeded", "failed", "skipped"}:
+        errors.append("launch.result has an unsupported value")
+
+    codex = require_object(receipt, "codexSession", errors, "root")
+    reject_unknown_keys(codex, {"requested", "created", "sessionRef", "instructionsDigest"}, errors, "codexSession")
+    require_bool(codex, "requested", errors, "codexSession")
+    require_bool(codex, "created", errors, "codexSession")
+    require_string(codex, "sessionRef", errors, "codexSession", allow_empty=True)
+    require_string(codex, "instructionsDigest", errors, "codexSession", allow_empty=True)
+
+    physical = require_object(receipt, "physicalDevice", errors, "root")
+    reject_unknown_keys(physical, {"requested", "gate", "approvalRef"}, errors, "physicalDevice")
+    physical_requested = require_bool(physical, "requested", errors, "physicalDevice")
+    gate = require_string(physical, "gate", errors, "physicalDevice")
+    approval_ref = require_string(physical, "approvalRef", errors, "physicalDevice", allow_empty=True)
+    if gate and gate not in {"disabled", "explicit-private-approval"}:
+        errors.append("physicalDevice.gate must be disabled or explicit-private-approval")
+    if physical_requested and (gate != "explicit-private-approval" or not approval_ref):
+        errors.append("physical-device receipts require explicit-private-approval and a non-empty approvalRef")
+    if not physical_requested and gate != "disabled":
+        errors.append("physicalDevice.gate must be disabled when physicalDevice.requested is false")
+
+    artifacts = require_object(receipt, "artifacts", errors, "root")
+    reject_unknown_keys(artifacts, {"allowed", "withheld"}, errors, "artifacts")
+    allowed = artifacts.get("allowed")
+    if not isinstance(allowed, list):
+        errors.append("artifacts.allowed must be a list")
+    else:
+        for index, artifact in enumerate(allowed):
+            path = f"artifacts.allowed[{index}]"
+            if not isinstance(artifact, dict):
+                errors.append(f"{path} must be an object")
+                continue
+            reject_unknown_keys(artifact, {"label", "path", "sha256", "sizeBytes"}, errors, path)
+            require_string(artifact, "label", errors, path)
+            artifact_path = require_string(artifact, "path", errors, path)
+            if artifact_path.startswith("/") or artifact_path.startswith("~") or ".." in Path(artifact_path).parts:
+                errors.append(f"{path}.path must be a relative sanitized path or storage ID")
+            sha256 = require_string(artifact, "sha256", errors, path)
+            if sha256 and not re.fullmatch(r"^[0-9a-fA-F]{64}$", sha256):
+                errors.append(f"{path}.sha256 must be a SHA-256 hex digest")
+            if not is_integer(artifact.get("sizeBytes")) or artifact.get("sizeBytes") < 0:
+                errors.append(f"{path}.sizeBytes must be a non-negative integer")
+
+    withheld = artifacts.get("withheld")
+    if not isinstance(withheld, list):
+        errors.append("artifacts.withheld must be a list")
+    else:
+        for index, artifact in enumerate(withheld):
+            path = f"artifacts.withheld[{index}]"
+            if not isinstance(artifact, dict):
+                errors.append(f"{path} must be an object")
+                continue
+            reject_unknown_keys(artifact, {"label", "reason"}, errors, path)
+            require_string(artifact, "label", errors, path)
+            require_string(artifact, "reason", errors, path)
+
+    redactions = receipt.get("redactions")
+    if not isinstance(redactions, list) or not all(isinstance(item, str) and item for item in redactions):
+        errors.append("redactions must be a list of non-empty strings")
+
+    return errors
+
+
 def load_and_validate_adapter(path: Path) -> tuple[dict[str, Any] | None, list[str]]:
     adapter, errors = load_json_file(path)
     if adapter is None:
@@ -127,6 +492,56 @@ def command_validate_adapter_path(path: Path, *, json_output: bool = False) -> i
         emit_json({"ok": True, "path": str(path), "adapter": summarize_adapter(adapter)})
     else:
         print(f"valid adapter: {adapter['name']}")
+    return 0
+
+
+def command_validate_manual_remote_job_path(path: Path, *, json_output: bool = False) -> int:
+    job, errors = load_json_file(path)
+    if job is not None:
+        errors.extend(validate_manual_remote_job_data(job))
+    if errors:
+        if json_output:
+            emit_json({"ok": False, "path": str(path), "errors": errors})
+        else:
+            for error in errors:
+                eprint(f"error: {error}")
+        return 1
+    assert job is not None
+    if json_output:
+        emit_json({
+            "ok": True,
+            "path": str(path),
+            "requestId": job.get("requestId"),
+            "sha": (job.get("git") or {}).get("sha"),
+            "physical_device_actions": bool((job.get("actions") or {}).get("physicalDevice")),
+        })
+    else:
+        print(f"valid manual remote PR job: {job['requestId']}")
+    return 0
+
+
+def command_validate_manual_remote_receipt_path(path: Path, *, json_output: bool = False) -> int:
+    receipt, errors = load_json_file(path)
+    if receipt is not None:
+        errors.extend(validate_manual_remote_receipt_data(receipt))
+    if errors:
+        if json_output:
+            emit_json({"ok": False, "path": str(path), "errors": errors})
+        else:
+            for error in errors:
+                eprint(f"error: {error}")
+        return 1
+    assert receipt is not None
+    if json_output:
+        emit_json({
+            "ok": True,
+            "path": str(path),
+            "requestId": receipt.get("requestId"),
+            "result": receipt.get("result"),
+            "physical_device_actions": bool((receipt.get("physicalDevice") or {}).get("requested")),
+        })
+    else:
+        print(f"valid manual remote PR receipt: {receipt['requestId']}")
     return 0
 
 
@@ -427,6 +842,26 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("path", help="Adapter JSON path.")
     validate_parser.add_argument("--json", action="store_true", help="Emit JSON.")
     validate_parser.set_defaults(func=lambda args: command_validate_adapter_path(Path(args.path), json_output=args.json))
+
+    manual_job_parser = subparsers.add_parser(
+        "validate-manual-remote-job",
+        help="Validate a Manual Remote PR Session job request JSON file.",
+    )
+    manual_job_parser.add_argument("path", help="Manual remote PR session job request JSON path.")
+    manual_job_parser.add_argument("--json", action="store_true", help="Emit JSON.")
+    manual_job_parser.set_defaults(
+        func=lambda args: command_validate_manual_remote_job_path(Path(args.path), json_output=args.json)
+    )
+
+    manual_receipt_parser = subparsers.add_parser(
+        "validate-manual-remote-receipt",
+        help="Validate a Manual Remote PR Session proof receipt JSON file.",
+    )
+    manual_receipt_parser.add_argument("path", help="Manual remote PR session receipt JSON path.")
+    manual_receipt_parser.add_argument("--json", action="store_true", help="Emit JSON.")
+    manual_receipt_parser.set_defaults(
+        func=lambda args: command_validate_manual_remote_receipt_path(Path(args.path), json_output=args.json)
+    )
 
     render_parser = subparsers.add_parser("render-workflows", help="Render workflow templates from an adapter.")
     render_parser.add_argument("--adapter", required=True, help="Adapter JSON path.")

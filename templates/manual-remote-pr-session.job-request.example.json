@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "manual-remote-pr-session/v1",
+  "kind": "manual-remote-pr-session.job-request",
+  "requestId": "mprs-example-001",
+  "requestedAt": "2026-06-28T00:00:00Z",
+  "repository": {
+    "fullName": "example/app",
+    "htmlUrl": "https://github.com/example/app"
+  },
+  "pullRequest": {
+    "number": 42,
+    "htmlUrl": "https://github.com/example/app/pull/42",
+    "baseRef": "main",
+    "headRef": "feature/example"
+  },
+  "git": {
+    "sha": "0123456789abcdef0123456789abcdef01234567"
+  },
+  "target": {
+    "hostProfileAlias": "example-mac",
+    "runProfile": "unit-tests"
+  },
+  "actions": {
+    "runTests": true,
+    "launchApp": false,
+    "createCodexSession": false,
+    "physicalDevice": false
+  },
+  "codexSession": {
+    "instructions": ""
+  },
+  "evidencePolicy": {
+    "artifactMode": "receipt-only",
+    "allowedArtifactGlobs": []
+  },
+  "gates": {
+    "physicalDeviceApproval": "disabled",
+    "approvalRef": ""
+  },
+  "requester": {
+    "actor": "example-user",
+    "workflowRunId": "1000000000",
+    "workflowRunAttempt": "1"
+  },
+  "validation": {
+    "status": "validated",
+    "validatedAt": "2026-06-28T00:00:00Z",
+    "validator": "apple-agent-kit"
+  }
+}
