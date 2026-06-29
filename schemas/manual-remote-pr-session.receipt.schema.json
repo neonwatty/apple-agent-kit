@@ -76,6 +76,136 @@
         },
         "required": ["physicalDevice"]
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "codexSession": {
+            "type": "object",
+            "anyOf": [
+              { "required": ["surfaceRequested"] },
+              { "required": ["surfaceCreated"] },
+              { "required": ["fallbackUsed"] },
+              { "required": ["requiredCapabilities"] },
+              { "required": ["capabilitiesAvailable"] }
+            ]
+          }
+        },
+        "required": ["codexSession"]
+      },
+      "then": {
+        "properties": {
+          "codexSession": {
+            "type": "object",
+            "required": [
+              "surfaceRequested",
+              "surfaceCreated",
+              "fallbackUsed",
+              "requiredCapabilities",
+              "capabilitiesAvailable"
+            ]
+          }
+        },
+        "required": ["codexSession"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "codexSession": {
+            "type": "object",
+            "required": ["created", "surfaceCreated"],
+            "properties": {
+              "created": { "const": true }
+            }
+          }
+        },
+        "required": ["codexSession"]
+      },
+      "then": {
+        "properties": {
+          "codexSession": {
+            "type": "object",
+            "required": ["surfaceCreated"],
+            "properties": {
+              "surfaceCreated": { "enum": ["cli", "desktop-open", "desktop-session"] }
+            }
+          }
+        },
+        "required": ["codexSession"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "codexSession": {
+            "type": "object",
+            "required": ["created", "surfaceCreated"],
+            "properties": {
+              "created": { "const": false }
+            }
+          }
+        },
+        "required": ["codexSession"]
+      },
+      "then": {
+        "properties": {
+          "codexSession": {
+            "type": "object",
+            "required": ["surfaceCreated"],
+            "properties": {
+              "surfaceCreated": { "const": "none" }
+            }
+          }
+        },
+        "required": ["codexSession"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "codexSession": {
+            "type": "object",
+            "required": ["created", "surfaceRequested", "surfaceCreated"],
+            "properties": {
+              "created": { "const": true }
+            },
+            "anyOf": [
+              {
+                "properties": {
+                  "surfaceRequested": { "const": "cli" },
+                  "surfaceCreated": { "enum": ["desktop-open", "desktop-session"] }
+                }
+              },
+              {
+                "properties": {
+                  "surfaceRequested": { "const": "desktop-open" },
+                  "surfaceCreated": { "enum": ["cli", "desktop-session"] }
+                }
+              },
+              {
+                "properties": {
+                  "surfaceRequested": { "const": "desktop-session" },
+                  "surfaceCreated": { "enum": ["cli", "desktop-open"] }
+                }
+              }
+            ]
+          }
+        },
+        "required": ["codexSession"]
+      },
+      "then": {
+        "properties": {
+          "codexSession": {
+            "type": "object",
+            "required": ["fallbackUsed"],
+            "properties": {
+              "fallbackUsed": { "const": true }
+            }
+          }
+        },
+        "required": ["codexSession"]
+      }
     }
   ],
   "properties": {
@@ -145,7 +275,22 @@
         "requested": { "type": "boolean" },
         "created": { "type": "boolean" },
         "sessionRef": { "type": "string", "maxLength": 256 },
-        "instructionsDigest": { "type": "string", "maxLength": 128 }
+        "instructionsDigest": { "type": "string", "maxLength": 128 },
+        "surfaceRequested": { "enum": ["cli", "desktop-open", "desktop-session"] },
+        "surfaceCreated": { "enum": ["none", "cli", "desktop-open", "desktop-session"] },
+        "fallbackUsed": { "type": "boolean" },
+        "requiredCapabilities": {
+          "type": "array",
+          "items": { "enum": ["computer-use", "browser-use"] },
+          "uniqueItems": true,
+          "maxItems": 2
+        },
+        "capabilitiesAvailable": {
+          "type": "array",
+          "items": { "enum": ["computer-use", "browser-use"] },
+          "uniqueItems": true,
+          "maxItems": 2
+        }
       }
     },
     "physicalDevice": {

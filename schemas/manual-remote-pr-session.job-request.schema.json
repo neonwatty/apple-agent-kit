@@ -73,6 +73,39 @@
         },
         "required": ["gates"]
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "codexSession": {
+            "type": "object",
+            "required": ["requiredCapabilities"],
+            "properties": {
+              "requiredCapabilities": { "minItems": 1 }
+            }
+          }
+        },
+        "required": ["codexSession"]
+      },
+      "then": {
+        "properties": {
+          "actions": {
+            "type": "object",
+            "required": ["createCodexSession"],
+            "properties": {
+              "createCodexSession": { "const": true }
+            }
+          },
+          "codexSession": {
+            "type": "object",
+            "required": ["surface"],
+            "properties": {
+              "surface": { "const": "desktop-session" }
+            }
+          }
+        },
+        "required": ["actions", "codexSession"]
+      }
     }
   ],
   "properties": {
@@ -132,7 +165,15 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "instructions": { "type": "string", "maxLength": 4000 }
+        "instructions": { "type": "string", "maxLength": 4000 },
+        "surface": { "enum": ["cli", "desktop-open", "desktop-session"] },
+        "fallbackPolicy": { "enum": ["allow-cli-fallback", "require-requested-surface"] },
+        "requiredCapabilities": {
+          "type": "array",
+          "items": { "enum": ["computer-use", "browser-use"] },
+          "uniqueItems": true,
+          "maxItems": 2
+        }
       }
     },
     "evidencePolicy": {

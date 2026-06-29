@@ -87,6 +87,8 @@ Recommended private adapter section:
         "acceptedRunProfiles": ["unit-tests", "ui-smoke"],
         "allowLaunchApp": true,
         "allowCodexSession": true,
+        "allowedCodexSurfaces": ["cli", "desktop-open"],
+        "allowedCodexCapabilities": [],
         "physicalDeviceDefault": false
       }
     ],
@@ -117,4 +119,7 @@ Contract rules:
 - `hostProfiles[].alias` is a stable, sanitized alias. Do not publish hostnames, serial numbers, local usernames, device names, or network addresses.
 - `runProfiles[].commands` are private allowlisted commands. Workflow inputs must never provide arbitrary shell commands.
 - `allowLaunchApp` and `allowCodexSession` are separate gates. A test-only job must not implicitly launch the app or start an agent session.
+- `allowedCodexSurfaces` is a private host allowlist. `cli` means a local Codex CLI/app-server session can be created; `desktop-open` means the adapter may open the checkout in Codex Desktop; `desktop-session` means the adapter can prove prompt delivery into a visible Codex Desktop session.
+- `allowedCodexCapabilities` is a private host allowlist for Desktop-only session features such as `computer-use` and `browser-use`. Do not advertise these capabilities until the receiving Mac can prove them with a sterile local probe.
+- If a request asks for `desktop-session` with `fallbackPolicy` set to `require-requested-surface`, the adapter must fail or skip Codex session creation rather than silently returning a CLI session.
 - `physicalDeviceDefault` must remain `false`. Physical iPhone support is a gated extension that requires a separate approval reference, private device policy, and stricter evidence controls.

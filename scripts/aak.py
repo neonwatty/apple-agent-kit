@@ -21,6 +21,7 @@ TEMPLATE_DIR = ROOT / "templates" / "github-actions"
 SECRET_KEY_RE = re.compile(r"(token|secret|password|api[_-]?key|private[_-]?key)", re.I)
 SAFE_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+CODEX_CAPABILITIES = {"computer-use", "browser-use"}
 REPO_FULL_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 RFC3339_DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$")
 FORBIDDEN_CONTRACT_TEXT = [
@@ -131,6 +132,24 @@ def require_bool(parent: dict[str, Any], key: str, errors: list[str], path: str)
         errors.append(f"{path}.{key} must be a boolean")
         return False
     return value
+
+
+def validate_codex_capabilities(value: Any, errors: list[str], path: str) -> list[str]:
+    if not isinstance(value, list):
+        errors.append(f"{path} must list only computer-use and browser-use")
+        return []
+    capabilities: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, str) or item not in CODEX_CAPABILITIES:
+            errors.append(f"{path} must list only computer-use and browser-use")
+            return []
+        if item in seen:
+            errors.append(f"{path} must not contain duplicates")
+            return []
+        seen.add(item)
+        capabilities.append(item)
+    return capabilities
 
 
 def is_integer(value: Any) -> bool:
@@ -256,7 +275,7 @@ def validate_manual_remote_job_data(job: dict[str, Any]) -> list[str]:
     reject_unknown_keys(actions, {"runTests", "launchApp", "createCodexSession", "physicalDevice"}, errors, "actions")
     require_bool(actions, "runTests", errors, "actions")
     require_bool(actions, "launchApp", errors, "actions")
-    require_bool(actions, "createCodexSession", errors, "actions")
+    create_codex_session = require_bool(actions, "createCodexSession", errors, "actions")
     physical_device = require_bool(actions, "physicalDevice", errors, "actions")
     if "commands" in job:
         errors.append("job requests must not contain commands; commands come from private adapters")
@@ -266,12 +285,32 @@ def validate_manual_remote_job_data(job: dict[str, Any]) -> list[str]:
         if not isinstance(codex_session, dict):
             errors.append("codexSession must be an object when present")
         else:
-            reject_unknown_keys(codex_session, {"instructions"}, errors, "codexSession")
+            reject_unknown_keys(
+                codex_session,
+                {"instructions", "surface", "fallbackPolicy", "requiredCapabilities"},
+                errors,
+                "codexSession",
+            )
             instructions = codex_session.get("instructions", "")
             if not isinstance(instructions, str):
                 errors.append("codexSession.instructions must be a string")
             elif len(instructions) > 4000:
                 errors.append("codexSession.instructions must be 4000 characters or fewer")
+            surface = codex_session.get("surface", "cli")
+            if surface not in {"cli", "desktop-open", "desktop-session"}:
+                errors.append("codexSession.surface must be cli, desktop-open, or desktop-session")
+            fallback_policy = codex_session.get("fallbackPolicy", "allow-cli-fallback")
+            if fallback_policy not in {"allow-cli-fallback", "require-requested-surface"}:
+                errors.append("codexSession.fallbackPolicy must be allow-cli-fallback or require-requested-surface")
+            capabilities = validate_codex_capabilities(
+                codex_session.get("requiredCapabilities", []),
+                errors,
+                "codexSession.requiredCapabilities",
+            )
+            if surface != "desktop-session" and capabilities:
+                errors.append("codexSession.requiredCapabilities requires codexSession.surface desktop-session")
+            elif capabilities and not create_codex_session:
+                errors.append("codexSession.requiredCapabilities requires actions.createCodexSession true")
 
     evidence = require_object(job, "evidencePolicy", errors, "root")
     reject_unknown_keys(evidence, {"artifactMode", "allowedArtifactGlobs"}, errors, "evidencePolicy")
@@ -391,11 +430,52 @@ def validate_manual_remote_receipt_data(receipt: dict[str, Any]) -> list[str]:
         errors.append("launch.result has an unsupported value")
 
     codex = require_object(receipt, "codexSession", errors, "root")
-    reject_unknown_keys(codex, {"requested", "created", "sessionRef", "instructionsDigest"}, errors, "codexSession")
+    reject_unknown_keys(
+        codex,
+        {
+            "requested",
+            "created",
+            "sessionRef",
+            "instructionsDigest",
+            "surfaceRequested",
+            "surfaceCreated",
+            "fallbackUsed",
+            "requiredCapabilities",
+            "capabilitiesAvailable",
+        },
+        errors,
+        "codexSession",
+    )
     require_bool(codex, "requested", errors, "codexSession")
-    require_bool(codex, "created", errors, "codexSession")
+    created = require_bool(codex, "created", errors, "codexSession")
     require_string(codex, "sessionRef", errors, "codexSession", allow_empty=True)
     require_string(codex, "instructionsDigest", errors, "codexSession", allow_empty=True)
+    surface_keys = {
+        "surfaceRequested",
+        "surfaceCreated",
+        "fallbackUsed",
+        "requiredCapabilities",
+        "capabilitiesAvailable",
+    }
+    if surface_keys.intersection(codex):
+        for key in surface_keys:
+            if key not in codex:
+                errors.append(f"codexSession.{key} is required when any Codex surface receipt field is present")
+        surface_requested = require_string(codex, "surfaceRequested", errors, "codexSession")
+        if surface_requested not in {"cli", "desktop-open", "desktop-session"}:
+            errors.append("codexSession.surfaceRequested must be cli, desktop-open, or desktop-session")
+        surface_created = require_string(codex, "surfaceCreated", errors, "codexSession")
+        if surface_created not in {"none", "cli", "desktop-open", "desktop-session"}:
+            errors.append("codexSession.surfaceCreated must be none, cli, desktop-open, or desktop-session")
+        elif created is False and surface_created != "none":
+            errors.append("codexSession.surfaceCreated must be none when codexSession.created is false")
+        elif created is True and surface_created == "none":
+            errors.append("codexSession.surfaceCreated must not be none when codexSession.created is true")
+        fallback_used = require_bool(codex, "fallbackUsed", errors, "codexSession")
+        if created is True and surface_created not in {"", "none"} and surface_requested != surface_created and not fallback_used:
+            errors.append("codexSession.fallbackUsed must be true when surfaceCreated differs from surfaceRequested")
+        for key in ("requiredCapabilities", "capabilitiesAvailable"):
+            validate_codex_capabilities(codex.get(key), errors, f"codexSession.{key}")
 
     physical = require_object(receipt, "physicalDevice", errors, "root")
     reject_unknown_keys(physical, {"requested", "gate", "approvalRef"}, errors, "physicalDevice")

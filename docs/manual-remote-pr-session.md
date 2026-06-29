@@ -49,7 +49,7 @@ The public workflow is only a request factory. The remote Mac remains responsibl
 Use [templates/github-actions/manual-remote-pr-session.yml](../templates/github-actions/manual-remote-pr-session.yml) in a private app repo. It:
 
 - runs only through `workflow_dispatch`;
-- accepts `pr_number`, `sha`, `host_profile_alias`, `run_profile`, `launch_app`, `create_codex_session`, `codex_instructions`, and `artifact_mode`;
+- accepts `pr_number`, `sha`, `host_profile_alias`, `run_profile`, `launch_app`, `create_codex_session`, `codex_session_surface`, `codex_session_fallback`, `codex_required_capabilities`, `codex_instructions`, and `artifact_mode`;
 - verifies the SHA is one of the PR commits using the GitHub API;
 - writes `artifacts/manual-remote-pr-session/job-request.json`;
 - validates that request with `aak validate-manual-remote-job`;
@@ -79,7 +79,7 @@ The request schema lives at [schemas/manual-remote-pr-session.job-request.schema
 - repository full name, PR number, PR URL, and exact commit SHA;
 - sanitized `hostProfileAlias` and `runProfile`;
 - boolean action gates for tests, app launch, Codex session creation, and physical device use;
-- optional Codex instructions with bounded length;
+- optional Codex instructions with bounded length, requested surface, fallback policy, and desktop capability requirements;
 - artifact mode and allowlist globs;
 - workflow requester and validation metadata.
 
@@ -93,15 +93,25 @@ python3 scripts/aak.py validate-manual-remote-job templates/manual-remote-pr-ses
 
 The Codex bridge is a private local adapter feature. The public job request can ask for a session, but the remote Mac decides whether to create one.
 
+The request distinguishes three Codex surfaces:
+
+- `cli`: create a local CLI/app-server-style Codex session that can be resumed or prompted by private tooling. This is useful for proof review and follow-up prompts, but it is not proof that a visible Codex Desktop sidebar session exists.
+- `desktop-open`: open the exact checkout in Codex Desktop and record that handoff. This is useful when a human wants the app focused on the PR workspace, but it does not guarantee prompt injection.
+- `desktop-session`: create a visible Codex Desktop session and deliver the prompt there. Use this when the PR needs Desktop-only capabilities such as Computer Use or browser-driven manual testing. Private adapters must fail or fall back according to `codexSession.fallbackPolicy` if they cannot prove this surface.
+
+`codexSession.requiredCapabilities` can list `computer-use` and/or `browser-use`. Capability requirements imply `desktop-session`; validators reject capability requests for `cli` or `desktop-open` surfaces.
+
+For backward compatibility with existing `manual-remote-pr-session/v1` private adapters, the new receipt surface fields are optional as a group. Legacy receipts without them remain valid. Once a receipt includes any surface field, it must include the full surface set and pass the consistency checks.
+
 Bridge flow:
 
 1. Poller accepts a validated job and checks out the exact SHA.
 2. Adapter writes a local session envelope containing the request ID, PR number, SHA, run profile, command results so far, artifact policy, and custom instructions.
 3. Adapter redacts secrets and strips raw logs before putting content into the Codex instruction file.
-4. Adapter invokes the private Codex launcher configured for that host profile.
-5. Receipt records `codexSession.created`, a sanitized local session reference or digest, and whether custom instructions were used.
+4. Adapter invokes the private Codex launcher configured for that host profile and requested surface.
+5. Receipt records `codexSession.created`, a sanitized local session reference or digest, requested and created surfaces, fallback use, capabilities requested and available, and whether custom instructions were used.
 
-The public contract does not assume a specific Codex CLI or desktop integration. Private adapters can implement the bridge with a local command, a desktop deep link, or a queued instruction file.
+The public contract does not assume a specific Codex CLI or desktop integration. Private adapters can implement the bridge with a local command, a desktop deep link, a queued instruction file, or a supported Desktop app API. Receipts must not label a CLI/app-server session as `desktop-session` unless the adapter has evidence that the session is visible and usable in Codex Desktop.
 
 ## Receipt Model
 
@@ -113,7 +123,7 @@ A sanitized receipt records:
 - started and completed timestamps;
 - accepted/rejected/final result;
 - command IDs, command classes, sanitized summaries, durations, exit codes, and per-command result;
-- app launch and Codex-session outcomes when requested;
+- app launch and Codex-session outcomes when requested, including requested/created Codex surface and any fallback;
 - allowed artifacts with labels, relative paths or storage IDs, hashes, and sizes;
 - withheld artifacts with reasons;
 - redaction notes.
