@@ -27,7 +27,10 @@
     "physicalDevice": false
   },
   "codexSession": {
-    "instructions": ""
+    "instructions": "",
+    "surface": "cli",
+    "fallbackPolicy": "allow-cli-fallback",
+    "requiredCapabilities": []
   },
   "evidencePolicy": {
     "artifactMode": "receipt-only",

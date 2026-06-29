@@ -30,6 +30,28 @@ on:
         required: true
         default: false
         type: boolean
+      codex_session_surface:
+        description: Requested Codex surface; desktop-session requires private bridge support
+        required: true
+        default: cli
+        type: choice
+        options:
+          - cli
+          - desktop-open
+          - desktop-session
+      codex_session_fallback:
+        description: Whether the adapter may fall back to a CLI session
+        required: true
+        default: allow-cli-fallback
+        type: choice
+        options:
+          - allow-cli-fallback
+          - require-requested-surface
+      codex_required_capabilities:
+        description: Optional comma-separated desktop capabilities, such as computer-use,browser-use
+        required: false
+        default: ""
+        type: string
       codex_instructions:
         description: Optional custom instructions for the local Codex session
         required: false
@@ -79,6 +101,9 @@ jobs:
           RUN_PROFILE: ${{ github.event.inputs.run_profile }}
           LAUNCH_APP: ${{ github.event.inputs.launch_app }}
           CREATE_CODEX_SESSION: ${{ github.event.inputs.create_codex_session }}
+          CODEX_SESSION_SURFACE: ${{ github.event.inputs.codex_session_surface }}
+          CODEX_SESSION_FALLBACK: ${{ github.event.inputs.codex_session_fallback }}
+          CODEX_REQUIRED_CAPABILITIES: ${{ github.event.inputs.codex_required_capabilities }}
           CODEX_INSTRUCTIONS: ${{ github.event.inputs.codex_instructions }}
           ARTIFACT_MODE: ${{ github.event.inputs.artifact_mode }}
           REQUESTER: ${{ github.actor }}
@@ -166,6 +191,13 @@ jobs:
               },
               "codexSession": {
                   "instructions": os.environ.get("CODEX_INSTRUCTIONS", ""),
+                  "surface": os.environ["CODEX_SESSION_SURFACE"],
+                  "fallbackPolicy": os.environ["CODEX_SESSION_FALLBACK"],
+                  "requiredCapabilities": [
+                      item.strip()
+                      for item in os.environ.get("CODEX_REQUIRED_CAPABILITIES", "").split(",")
+                      if item.strip()
+                  ],
               },
               "evidencePolicy": {
                   "artifactMode": os.environ["ARTIFACT_MODE"],

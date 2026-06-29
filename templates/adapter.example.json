@@ -32,6 +32,8 @@
         "acceptedRunProfiles": ["unit-tests", "ui-smoke"],
         "allowLaunchApp": true,
         "allowCodexSession": true,
+        "allowedCodexSurfaces": ["cli", "desktop-open"],
+        "allowedCodexCapabilities": [],
         "physicalDeviceDefault": false
       }
     ],
