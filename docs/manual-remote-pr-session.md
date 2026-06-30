@@ -71,6 +71,46 @@ Required private responsibilities:
 - never run command strings supplied by workflow input;
 - store raw logs and screenshots only where the private evidence policy permits.
 
+## Menu Bar App Smoke Pattern
+
+Menu bar apps often do not expose a normal main window after launch. A private run
+profile for this kind of app should prove the first usable surface in phases
+instead of assuming a screenshot or window tree is always available.
+
+Recommended private phases:
+
+1. Run the configured test command.
+2. Build the app bundle that will be launched.
+3. Launch the app through an allowlisted private command.
+4. Prove the app process is running from the checked-out PR build.
+5. Optionally run UI automation diagnostics for status items, popovers, windows,
+   screenshots, or accessibility state.
+6. Clean up the launched process and temporary private artifacts.
+
+Only phases 1 through 4 should be required unless the private adapter has a stable
+host-specific UI automation proof. Treat menu bar item counts, click attempts,
+popover counts, screenshots, and accessibility inspection as diagnostics until
+they are repeatable in the same execution context as the receiver, such as a
+LaunchAgent. A check that passes in an interactive shell but flakes under the
+receiver should not be the required proof.
+
+Public receipts should describe the proof scope precisely. For example, a
+menu-bar smoke profile may report that tests passed, the app built, launch
+succeeded, and the app process was observed. It must not claim rendered-screen or
+popover verification unless the adapter actually proved that surface during the
+run.
+
+Keep profile output receipt-safe:
+
+- use stable command IDs and command classes such as `test`, `build`,
+  `launch`, and `ui-smoke`;
+- print sanitized phase names, counts, exit codes, and pass/fail statuses;
+- keep raw stdout, stderr, screenshots, accessibility trees, window titles,
+  local paths, account content, and device identifiers out of public receipts;
+- record UI automation limitations as withheld artifacts or diagnostic notes
+  rather than failing the run when those checks are not part of the required
+  proof.
+
 ## Job Request Schema
 
 The request schema lives at [schemas/manual-remote-pr-session.job-request.schema.json](../schemas/manual-remote-pr-session.job-request.schema.json). A valid request includes:
