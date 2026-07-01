@@ -26,7 +26,7 @@
       "required": ["name", "platform"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
-        "platform": { "const": "macos" }
+        "platform": { "enum": ["macos", "ios"] }
       }
     },
     "startedAt": { "type": "string", "format": "date-time" },

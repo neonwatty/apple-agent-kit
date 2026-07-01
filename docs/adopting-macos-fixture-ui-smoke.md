@@ -32,6 +32,7 @@ python3 path/to/apple-agent-kit/scripts/aak.py prepare-fixture-ui-smoke \
   --adapter .apple-agent-kit.json \
   --script /tmp/aak-fixture-smoke.sh \
   --approval fixture-ui-smoke \
+  --platform macos \
   --json
 
 python3 path/to/apple-agent-kit/scripts/aak.py validate-fixture-ui-smoke-receipt \

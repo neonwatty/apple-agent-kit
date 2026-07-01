@@ -99,7 +99,9 @@ The optional `automation` object describes sterile GUI smoke hooks for private r
 - `automation.fixtureReceiptPath` is the relative path where the private smoke command writes the validated receipt.
 - `automation.allowedArtifactGlobs` is the relative allowlist uploaded by the manual fixture workflow.
 
-Use `templates/fixture-ui-smoke.receipt.example.json` when recording a fixture smoke proof. Keep filled receipts private if they include product-specific paths, log excerpts, bundle identifiers, or screenshots.
+For iOS simulator fixture smoke, `platforms.ios.simulatorDestination` must be set. `prepare-fixture-ui-smoke --platform ios` exports the destination as `AAK_FIXTURE_SIMULATOR_DESTINATION` so the private command does not guess a device.
+
+Use `templates/fixture-ui-smoke.receipt.example.json` or `templates/ios-simulator-fixture-ui-smoke.receipt.example.json` when recording a fixture smoke proof. Keep filled receipts private if they include product-specific paths, log excerpts, bundle identifiers, result bundle internals, or screenshots.
 
 Use `templates/fixture-ui-smoke-command.example.sh` as a private-repo starting point for writing the receipt and sanitized log artifact. Replace only the probe section with app-specific fixture automation; keep raw accessibility trees, host paths, account data, and non-fixture screenshots out of the receipt.
 

@@ -28,6 +28,8 @@ Before declaring a run complete, the agent should try to disprove the result and
 
 Fixture UI smoke receipts should include the fixture target, log time window, expected events, observed event count, artifact allowlist, withheld artifacts, privacy assertions, and the strongest attempted disproof. Use sanitized event names or counts in public proof records; keep raw logs local or private when they expose paths, usernames, host details, or product data.
 
+iOS simulator fixture smoke receipts may reference result bundles or simulator logs only through sanitized paths, hashes, sizes, and counts. Keep raw simulator logs, full result bundle internals, UDIDs, and screenshots out of public evidence unless a sterile screenshot policy explicitly allows them.
+
 For local Xcode readiness, prefer:
 
 ```bash

@@ -23,6 +23,7 @@ REQUIRED_FILES = [
     "LICENSE",
     "README.md",
     "docs/adapter-contract.md",
+    "docs/adopting-ios-simulator-fixture-ui-smoke.md",
     "docs/adopting-macos-fixture-ui-smoke.md",
     "docs/install.md",
     "docs/manual-remote-pr-session.md",
@@ -35,6 +36,7 @@ REQUIRED_FILES = [
     "skills/codex-autoreview/SKILL.md",
     "skills/codex-pr-closeout-review/SKILL.md",
     "skills/codex-pr-closeout-review/scripts/codex-pr-review",
+    "skills/ios-simulator-fixture-ui-smoke/SKILL.md",
     "skills/macos-fixture-ui-smoke/SKILL.md",
     "schemas/fixture-ui-smoke.receipt.schema.json",
     "schemas/manual-remote-pr-session.job-request.schema.json",
@@ -42,6 +44,8 @@ REQUIRED_FILES = [
     "templates/adapter.example.json",
     "templates/fixture-ui-smoke-command.example.sh",
     "templates/fixture-ui-smoke.receipt.example.json",
+    "templates/ios-simulator-fixture-ui-smoke.receipt.example.json",
+    "templates/github-actions/ios-simulator-fixture-ui-smoke.yml",
     "templates/github-actions/macos-fixture-ui-smoke.yml",
     "templates/github-actions/manual-remote-pr-session.yml",
     "templates/manual-remote-pr-session.job-request.example.json",
@@ -161,6 +165,20 @@ def check_cli() -> None:
             "fixture-ui-smoke",
             "--json",
         ])
+        run([
+            "python3",
+            "scripts/aak.py",
+            "prepare-fixture-ui-smoke",
+            "--adapter",
+            "templates/adapter.example.json",
+            "--script",
+            str(Path(fixture_output) / "ios-simulator-fixture-ui-smoke.sh"),
+            "--approval",
+            "fixture-ui-smoke",
+            "--platform",
+            "ios",
+            "--json",
+        ])
     with tempfile.TemporaryDirectory(prefix="aak-fixture-command-") as fixture_output:
         receipt_path = Path(fixture_output) / "artifacts" / "fixture-ui-smoke" / "fixture-ui-smoke.receipt.json"
         log_path = Path(fixture_output) / "artifacts" / "fixture-ui-smoke" / "fixture.log"
@@ -176,6 +194,7 @@ def check_cli() -> None:
         )
         run(["python3", "scripts/aak.py", "validate-fixture-ui-smoke-receipt", str(receipt_path), "--json"])
     run(["python3", "scripts/aak.py", "validate-fixture-ui-smoke-receipt", "templates/fixture-ui-smoke.receipt.example.json", "--json"])
+    run(["python3", "scripts/aak.py", "validate-fixture-ui-smoke-receipt", "templates/ios-simulator-fixture-ui-smoke.receipt.example.json", "--json"])
     run(["python3", "scripts/aak.py", "validate-manual-remote-job", "templates/manual-remote-pr-session.job-request.example.json", "--json"])
     run(["python3", "scripts/aak.py", "validate-manual-remote-receipt", "templates/manual-remote-pr-session.receipt.example.json", "--json"])
     run(["python3", "scripts/aak.py", "inspect", "--repo", ".", "--adapter", "templates/adapter.example.json", "--json"])
@@ -204,6 +223,11 @@ def check_cli() -> None:
             fail("fixture UI smoke workflow was not rendered")
         if "runs-on: [self-hosted, macOS, apple-agent-kit]" not in fixture_workflow.read_text(encoding="utf-8"):
             fail("fixture UI smoke workflow did not render macOS runner labels")
+        ios_fixture_workflow = Path(output) / "ios-simulator-fixture-ui-smoke.yml"
+        if not ios_fixture_workflow.is_file():
+            fail("iOS simulator fixture UI smoke workflow was not rendered")
+        if "runs-on: macos-15" not in ios_fixture_workflow.read_text(encoding="utf-8"):
+            fail("iOS simulator fixture UI smoke workflow did not render macOS runner")
 
 
 def iter_public_text_files() -> list[Path]:
