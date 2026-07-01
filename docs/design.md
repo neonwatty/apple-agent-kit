@@ -22,10 +22,14 @@ The v0 command entrypoint is `scripts/aak.py`. It is intentionally dependency-fr
 - `render-workflows`
 - `check-xcode`
 - `summarize-xcresult`
+- `prepare-fixture-ui-smoke`
+- `validate-fixture-ui-smoke-receipt`
 - `validate-manual-remote-job`
 - `validate-manual-remote-receipt`
 
-The device-free self-hosted Mac runner-health and macOS eligibility templates render from `ci.macosRunnerLabels`. The iOS eligibility template defaults to a hosted macOS runner from `ci.macosRunner` and keeps simulator inventory read-only. Keep these separate from physical iOS runner labels so an eligibility check does not imply install, WDA, screenshots, app launch, UI smoke, simulator boot, or physical-device smoke.
+The device-free self-hosted Mac runner-health, macOS eligibility, and macOS fixture UI smoke templates render from `ci.macosRunnerLabels`. The iOS eligibility template defaults to a hosted macOS runner from `ci.macosRunner` and keeps simulator inventory read-only. Keep these separate from physical iOS runner labels so an eligibility check does not imply install, WDA, screenshots, app launch, UI smoke, simulator boot, or physical-device smoke.
+
+The macOS fixture UI smoke template is manual-dispatch only. It reads the private adapter from `APPLE_AGENT_KIT_ADAPTER_JSON`, requires an exact `fixture-ui-smoke` approval input, runs the private fixture command, validates the receipt, and uploads only adapter-allowlisted evidence.
 
 Manual Remote PR Session is the first pull-based remote hardware contract. Its public workflow validates a PR/SHA request and uploads a job-request artifact. Private pollers and adapters make all execution decisions, including host acceptance, checkout path, command allowlist, app launch, Codex-session bridge, artifact policy, and receipt publication.
 
@@ -36,6 +40,7 @@ Manual Remote PR Session is the first pull-based remote hardware contract. Its p
 - `macos-runner-health`: self-hosted GUI runner preflight and cleanup.
 - `ios-simulator-ci`: simulator build, test, and UI smoke checks.
 - `ios-physical-device`: physical iPhone preflight, install, WDA/Appium readiness, and UI smoke.
+- `macos-fixture-ui-smoke`: deterministic sterile fixture UI smoke with bounded logs, optional sterile screenshots, and privacy-safe receipts.
 - `xcresult-proof`: parse `xcresult` bundles, summarize failures, coverage, and artifacts.
 - `privacy-safe-evidence`: enforce evidence redaction and screenshot boundaries.
 - `codex-autoreview`: perform a scoped Codex-native branch/PR closeout review before commit, PR, or merge.
@@ -68,7 +73,8 @@ The expected private validation path is:
 
 1. Dry run against a sample repo.
 2. macOS CI smoke on a sample Mac app.
-3. iOS simulator smoke on a sample iOS app.
-4. Self-hosted Mac runner preflight on a LAN Mac Mini, with no physical-device actions.
-5. Physical iPhone smoke on a preview device, only after separate approval.
-6. Audit generated receipts for usefulness and leakage.
+3. macOS fixture UI smoke against a sterile app or demo mode.
+4. iOS simulator smoke on a sample iOS app.
+5. Self-hosted Mac runner preflight on a LAN Mac Mini, with no physical-device actions.
+6. Physical iPhone smoke on a preview device, only after separate approval.
+7. Audit generated receipts for usefulness and leakage.

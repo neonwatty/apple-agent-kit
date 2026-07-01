@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -22,6 +23,7 @@ REQUIRED_FILES = [
     "LICENSE",
     "README.md",
     "docs/adapter-contract.md",
+    "docs/adopting-macos-fixture-ui-smoke.md",
     "docs/install.md",
     "docs/manual-remote-pr-session.md",
     "docs/privacy-safe-evidence.md",
@@ -33,9 +35,14 @@ REQUIRED_FILES = [
     "skills/codex-autoreview/SKILL.md",
     "skills/codex-pr-closeout-review/SKILL.md",
     "skills/codex-pr-closeout-review/scripts/codex-pr-review",
+    "skills/macos-fixture-ui-smoke/SKILL.md",
+    "schemas/fixture-ui-smoke.receipt.schema.json",
     "schemas/manual-remote-pr-session.job-request.schema.json",
     "schemas/manual-remote-pr-session.receipt.schema.json",
     "templates/adapter.example.json",
+    "templates/fixture-ui-smoke-command.example.sh",
+    "templates/fixture-ui-smoke.receipt.example.json",
+    "templates/github-actions/macos-fixture-ui-smoke.yml",
     "templates/github-actions/manual-remote-pr-session.yml",
     "templates/manual-remote-pr-session.job-request.example.json",
     "templates/manual-remote-pr-session.receipt.example.json",
@@ -112,9 +119,15 @@ def check_required_files() -> None:
     missing = [path for path in REQUIRED_FILES + PROOF_RECORDS if not (ROOT / path).is_file()]
     if missing:
         fail("missing required files: " + ", ".join(missing))
-
-    if (ROOT / "docs" / "goals").exists():
-        fail("docs/goals must not be present in the public v0 release tree")
+    tracked_goals = subprocess.run(
+        ["git", "ls-files", "docs/goals"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if tracked_goals.stdout.strip():
+        fail("docs/goals must not be tracked in the public v0 release tree")
 
 
 def check_manifests() -> None:
@@ -134,6 +147,35 @@ def check_manifests() -> None:
 
 def check_cli() -> None:
     run(["python3", "scripts/aak.py", "validate-adapter", "templates/adapter.example.json", "--json"])
+    load_json("schemas/fixture-ui-smoke.receipt.schema.json")
+    with tempfile.TemporaryDirectory(prefix="aak-fixture-prepare-") as fixture_output:
+        run([
+            "python3",
+            "scripts/aak.py",
+            "prepare-fixture-ui-smoke",
+            "--adapter",
+            "templates/adapter.example.json",
+            "--script",
+            str(Path(fixture_output) / "fixture-ui-smoke.sh"),
+            "--approval",
+            "fixture-ui-smoke",
+            "--json",
+        ])
+    with tempfile.TemporaryDirectory(prefix="aak-fixture-command-") as fixture_output:
+        receipt_path = Path(fixture_output) / "artifacts" / "fixture-ui-smoke" / "fixture-ui-smoke.receipt.json"
+        log_path = Path(fixture_output) / "artifacts" / "fixture-ui-smoke" / "fixture.log"
+        subprocess.run(
+            ["bash", str(ROOT / "templates" / "fixture-ui-smoke-command.example.sh")],
+            cwd=fixture_output,
+            check=True,
+            env={
+                **os.environ,
+                "AAK_FIXTURE_RECEIPT_PATH": str(receipt_path.relative_to(fixture_output)),
+                "AAK_FIXTURE_LOG_PATH": str(log_path.relative_to(fixture_output)),
+            },
+        )
+        run(["python3", "scripts/aak.py", "validate-fixture-ui-smoke-receipt", str(receipt_path), "--json"])
+    run(["python3", "scripts/aak.py", "validate-fixture-ui-smoke-receipt", "templates/fixture-ui-smoke.receipt.example.json", "--json"])
     run(["python3", "scripts/aak.py", "validate-manual-remote-job", "templates/manual-remote-pr-session.job-request.example.json", "--json"])
     run(["python3", "scripts/aak.py", "validate-manual-remote-receipt", "templates/manual-remote-pr-session.receipt.example.json", "--json"])
     run(["python3", "scripts/aak.py", "inspect", "--repo", ".", "--adapter", "templates/adapter.example.json", "--json"])
@@ -157,6 +199,11 @@ def check_cli() -> None:
         receipt = Path(output) / "render-receipt.json"
         if not receipt.is_file():
             fail("render workflow receipt was not created")
+        fixture_workflow = Path(output) / "macos-fixture-ui-smoke.yml"
+        if not fixture_workflow.is_file():
+            fail("fixture UI smoke workflow was not rendered")
+        if "runs-on: [self-hosted, macOS, apple-agent-kit]" not in fixture_workflow.read_text(encoding="utf-8"):
+            fail("fixture UI smoke workflow did not render macOS runner labels")
 
 
 def iter_public_text_files() -> list[Path]:

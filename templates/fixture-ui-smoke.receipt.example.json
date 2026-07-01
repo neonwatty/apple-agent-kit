@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "fixture-ui-smoke/v1",
+  "kind": "fixture-ui-smoke.receipt",
+  "adapter": {
+    "name": "example-preview",
+    "platform": "macos"
+  },
+  "startedAt": "2026-06-30T12:00:00Z",
+  "completedAt": "2026-06-30T12:02:00Z",
+  "result": "succeeded",
+  "target": {
+    "fixtureBundleIdentifier": "com.example.app.fixture",
+    "fixtureMode": "sterile-demo",
+    "nonFixtureAppsTouched": false,
+    "physicalDeviceActions": false
+  },
+  "commands": [
+    {
+      "id": "fixture-ui-smoke",
+      "class": "macos-fixture-ui-smoke",
+      "summary": "Ran deterministic fixture click/type smoke",
+      "durationSeconds": 18.4,
+      "exitCode": 0,
+      "result": "succeeded"
+    }
+  ],
+  "evidence": {
+    "logSubsystem": "com.example.app.fixture",
+    "logTimeWindow": "2026-06-30T12:00:00Z/2026-06-30T12:02:00Z",
+    "expectedEvents": [
+      "fixture-window-opened",
+      "fixture-button-pressed",
+      "fixture-text-updated"
+    ],
+    "observedEventCount": 3,
+    "artifacts": [
+      {
+        "label": "sanitized-fixture-log",
+        "path": "artifacts/fixture-ui-smoke/fixture.log",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "sizeBytes": 1024
+      },
+      {
+        "label": "sterile-fixture-screenshot",
+        "path": "artifacts/fixture-ui-smoke/fixture.png",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "sizeBytes": 2048
+      }
+    ],
+    "withheld": [
+      {
+        "label": "raw-accessibility-tree",
+        "reason": "raw private accessibility trees are not public evidence"
+      }
+    ]
+  },
+  "privacy": {
+    "screenshots": "sterile-only",
+    "rawAccessibilityTrees": false,
+    "redactSecrets": true,
+    "assertions": [
+      "No personal app screenshots were captured.",
+      "No private account data was used.",
+      "No raw private accessibility tree was published."
+    ]
+  },
+  "strongestAttemptedDisproof": "Checked fixture bundle targeting, expected log events, artifact allowlist, and non-fixture app exclusion."
+}

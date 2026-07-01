@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/apple-agent-kit/fixture-ui-smoke.receipt.schema.json",
+  "title": "Apple Agent Kit Fixture UI Smoke Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "adapter",
+    "startedAt",
+    "completedAt",
+    "result",
+    "target",
+    "commands",
+    "evidence",
+    "privacy",
+    "strongestAttemptedDisproof"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "fixture-ui-smoke/v1" },
+    "kind": { "const": "fixture-ui-smoke.receipt" },
+    "adapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "platform"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "platform": { "const": "macos" }
+      }
+    },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "result": { "enum": ["succeeded", "failed", "canceled", "skipped", "timed-out"] },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixtureBundleIdentifier", "fixtureMode", "nonFixtureAppsTouched", "physicalDeviceActions"],
+      "properties": {
+        "fixtureBundleIdentifier": { "type": "string", "minLength": 1 },
+        "fixtureMode": { "type": "string", "minLength": 1 },
+        "nonFixtureAppsTouched": { "const": false },
+        "physicalDeviceActions": { "const": false }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "class", "summary", "durationSeconds", "exitCode", "result"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+          "class": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 240 },
+          "durationSeconds": { "type": "number", "minimum": 0 },
+          "exitCode": { "type": "integer" },
+          "result": { "enum": ["succeeded", "failed", "canceled", "skipped", "timed-out"] }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logSubsystem", "logTimeWindow", "expectedEvents", "observedEventCount", "artifacts", "withheld"],
+      "properties": {
+        "logSubsystem": { "type": "string", "minLength": 1 },
+        "logTimeWindow": { "type": "string", "pattern": "^.+/.+$" },
+        "expectedEvents": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "observedEventCount": { "type": "integer", "minimum": 0 },
+        "artifacts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifact" }
+        },
+        "withheld": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/withheldArtifact" }
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["screenshots", "rawAccessibilityTrees", "redactSecrets", "assertions"],
+      "properties": {
+        "screenshots": { "enum": ["none", "sterile-only"] },
+        "rawAccessibilityTrees": { "const": false },
+        "redactSecrets": { "const": true },
+        "assertions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "strongestAttemptedDisproof": { "type": "string", "minLength": 1, "maxLength": 500 }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "path", "sha256", "sizeBytes"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "anyOf": [
+              { "pattern": "^/" },
+              { "pattern": "^~" },
+              { "pattern": "(^|/)\\.\\.(/|$)" }
+            ]
+          }
+        },
+        "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+        "sizeBytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "withheldArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "reason"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

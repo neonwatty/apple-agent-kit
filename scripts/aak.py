@@ -8,6 +8,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -43,10 +44,12 @@ FORBIDDEN_RECEIPT_KEYS = {
     "stdout",
     "udid",
 }
+ALLOWED_SECRET_POLICY_KEYS = {"redactSecrets"}
 IGNORED_DIRS = {
     ".git",
     ".goalbuddy-board",
     ".swiftpm",
+    "__pycache__",
     "DerivedData",
     "build",
     "node_modules",
@@ -107,6 +110,31 @@ def validate_adapter_data(adapter: dict[str, Any]) -> list[str]:
     elif "redactSecrets" not in privacy:
         errors.append("adapter.privacy.redactSecrets is required")
 
+    automation = adapter.get("automation")
+    if automation is not None:
+        if not isinstance(automation, dict):
+            errors.append("adapter.automation must be an object when present")
+        else:
+            allowed = {
+                "fixtureBundleIdentifier",
+                "fixtureSmokeCommand",
+                "logSubsystem",
+                "allowedEvidence",
+                "fixtureReceiptPath",
+                "allowedArtifactGlobs",
+            }
+            for key in sorted(set(automation) - allowed):
+                errors.append(f"adapter.automation.{key} is not allowed")
+            for key in ("fixtureBundleIdentifier", "fixtureSmokeCommand", "logSubsystem", "fixtureReceiptPath"):
+                value = automation.get(key)
+                if value is not None and (not isinstance(value, str) or not value):
+                    errors.append(f"adapter.automation.{key} must be a non-empty string when present")
+            for key in ("allowedEvidence", "allowedArtifactGlobs"):
+                value = automation.get(key)
+                if value is not None:
+                    if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
+                        errors.append(f"adapter.automation.{key} must be a list of non-empty strings")
+
     return errors
 
 
@@ -132,6 +160,19 @@ def require_bool(parent: dict[str, Any], key: str, errors: list[str], path: str)
         errors.append(f"{path}.{key} must be a boolean")
         return False
     return value
+
+
+def reject_unsafe_relative_path(value: str, label: str, errors: list[str]) -> None:
+    path = Path(value)
+    if path.is_absolute() or value.startswith("~") or ".." in path.parts:
+        errors.append(f"{label} must be a relative sanitized path or glob")
+
+
+def looks_like_image_path(value: str) -> bool:
+    lowered = value.lower()
+    return lowered.endswith((".png", ".jpg", ".jpeg", ".heic")) or any(
+        token in lowered for token in ("screenshot", "screen-shot")
+    )
 
 
 def validate_codex_capabilities(value: Any, errors: list[str], path: str) -> list[str]:
@@ -212,8 +253,8 @@ def validate_common_remote_pr_fields(data: dict[str, Any], errors: list[str]) ->
 def collect_forbidden_contract_values(value: Any, errors: list[str], path: str = "root") -> None:
     if isinstance(value, dict):
         for key, nested in value.items():
-            if key in FORBIDDEN_RECEIPT_KEYS or SECRET_KEY_RE.search(key):
-                errors.append(f"{path}.{key} is not allowed in sanitized manual remote session data")
+            if key in FORBIDDEN_RECEIPT_KEYS or (key not in ALLOWED_SECRET_POLICY_KEYS and SECRET_KEY_RE.search(key)):
+                errors.append(f"{path}.{key} is not allowed in sanitized contract data")
             collect_forbidden_contract_values(nested, errors, f"{path}.{key}")
     elif isinstance(value, list):
         for index, nested in enumerate(value):
@@ -346,6 +387,184 @@ def validate_manual_remote_job_data(job: dict[str, Any]) -> list[str]:
         errors.append("validation.status must be validated")
     require_datetime_string(validation, "validatedAt", errors, "validation")
     require_string(validation, "validator", errors, "validation")
+
+    return errors
+
+
+def validate_artifact_reference(artifact: dict[str, Any], errors: list[str], path: str) -> None:
+    reject_unknown_keys(artifact, {"label", "path", "sha256", "sizeBytes"}, errors, path)
+    require_string(artifact, "label", errors, path)
+    artifact_path = require_string(artifact, "path", errors, path)
+    if artifact_path.startswith("/") or artifact_path.startswith("~") or ".." in Path(artifact_path).parts:
+        errors.append(f"{path}.path must be a relative sanitized path or storage ID")
+    sha256 = require_string(artifact, "sha256", errors, path)
+    if sha256 and not re.fullmatch(r"^[0-9a-fA-F]{64}$", sha256):
+        errors.append(f"{path}.sha256 must be a SHA-256 hex digest")
+    if not is_integer(artifact.get("sizeBytes")) or artifact.get("sizeBytes") < 0:
+        errors.append(f"{path}.sizeBytes must be a non-negative integer")
+
+
+def validate_fixture_ui_smoke_receipt_data(receipt: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    collect_forbidden_contract_values(receipt, errors)
+    reject_unknown_keys(
+        receipt,
+        {
+            "schemaVersion",
+            "kind",
+            "adapter",
+            "startedAt",
+            "completedAt",
+            "result",
+            "target",
+            "commands",
+            "evidence",
+            "privacy",
+            "strongestAttemptedDisproof",
+        },
+        errors,
+        "root",
+    )
+
+    if receipt.get("schemaVersion") != "fixture-ui-smoke/v1":
+        errors.append("schemaVersion must be fixture-ui-smoke/v1")
+    if receipt.get("kind") != "fixture-ui-smoke.receipt":
+        errors.append("kind must be fixture-ui-smoke.receipt")
+
+    adapter = require_object(receipt, "adapter", errors, "root")
+    reject_unknown_keys(adapter, {"name", "platform"}, errors, "adapter")
+    require_string(adapter, "name", errors, "adapter")
+    platform_name = require_string(adapter, "platform", errors, "adapter")
+    if platform_name and platform_name != "macos":
+        errors.append("adapter.platform must be macos")
+
+    require_datetime_string(receipt, "startedAt", errors, "root")
+    require_datetime_string(receipt, "completedAt", errors, "root")
+    result = require_string(receipt, "result", errors, "root")
+    if result and result not in {"succeeded", "failed", "canceled", "skipped", "timed-out"}:
+        errors.append("result has an unsupported value")
+
+    target = require_object(receipt, "target", errors, "root")
+    reject_unknown_keys(
+        target,
+        {"fixtureBundleIdentifier", "fixtureMode", "nonFixtureAppsTouched", "physicalDeviceActions"},
+        errors,
+        "target",
+    )
+    require_string(target, "fixtureBundleIdentifier", errors, "target")
+    require_string(target, "fixtureMode", errors, "target")
+    non_fixture = require_bool(target, "nonFixtureAppsTouched", errors, "target")
+    physical_actions = require_bool(target, "physicalDeviceActions", errors, "target")
+    if non_fixture:
+        errors.append("target.nonFixtureAppsTouched must be false for a fixture UI smoke receipt")
+    if physical_actions:
+        errors.append("target.physicalDeviceActions must be false for a fixture UI smoke receipt")
+
+    commands = receipt.get("commands")
+    if not isinstance(commands, list) or not commands:
+        errors.append("commands must be a non-empty list")
+    else:
+        for index, command in enumerate(commands):
+            path = f"commands[{index}]"
+            if not isinstance(command, dict):
+                errors.append(f"{path} must be an object")
+                continue
+            reject_unknown_keys(command, {"id", "class", "summary", "durationSeconds", "exitCode", "result"}, errors, path)
+            command_id = require_string(command, "id", errors, path)
+            if command_id:
+                validate_safe_id(command_id, f"{path}.id", errors)
+            command_class = require_string(command, "class", errors, path)
+            if command_class:
+                validate_safe_id(command_class, f"{path}.class", errors)
+            summary = require_string(command, "summary", errors, path)
+            if summary and len(summary) > 240:
+                errors.append(f"{path}.summary must be 240 characters or fewer")
+            duration = command.get("durationSeconds")
+            if not is_number(duration) or duration < 0:
+                errors.append(f"{path}.durationSeconds must be a non-negative number")
+            if not is_integer(command.get("exitCode")):
+                errors.append(f"{path}.exitCode must be an integer")
+            command_result = require_string(command, "result", errors, path)
+            if command_result and command_result not in {"succeeded", "failed", "canceled", "skipped", "timed-out"}:
+                errors.append(f"{path}.result has an unsupported value")
+
+    evidence = require_object(receipt, "evidence", errors, "root")
+    reject_unknown_keys(
+        evidence,
+        {"logSubsystem", "logTimeWindow", "expectedEvents", "observedEventCount", "artifacts", "withheld"},
+        errors,
+        "evidence",
+    )
+    require_string(evidence, "logSubsystem", errors, "evidence")
+    log_time_window = require_string(evidence, "logTimeWindow", errors, "evidence")
+    if log_time_window and "/" not in log_time_window:
+        errors.append("evidence.logTimeWindow must contain start/end RFC3339 timestamps separated by /")
+    elif log_time_window:
+        start_text, end_text = log_time_window.split("/", 1)
+        for label, value in (("start", start_text), ("end", end_text)):
+            if not RFC3339_DATETIME_RE.fullmatch(value):
+                errors.append(f"evidence.logTimeWindow {label} must be an RFC3339 date-time")
+            else:
+                try:
+                    datetime.fromisoformat(value.replace("Z", "+00:00"))
+                except ValueError:
+                    errors.append(f"evidence.logTimeWindow {label} must be an RFC3339 date-time")
+    expected_events = evidence.get("expectedEvents")
+    if not isinstance(expected_events, list) or not expected_events or not all(isinstance(item, str) and item for item in expected_events):
+        errors.append("evidence.expectedEvents must be a non-empty list of event names")
+    observed_count = evidence.get("observedEventCount")
+    if not is_integer(observed_count) or observed_count < 0:
+        errors.append("evidence.observedEventCount must be a non-negative integer")
+    elif result == "succeeded" and isinstance(expected_events, list) and observed_count < len(expected_events):
+        errors.append("evidence.observedEventCount must be at least the expected event count when result is succeeded")
+
+    privacy = require_object(receipt, "privacy", errors, "root")
+    reject_unknown_keys(privacy, {"screenshots", "rawAccessibilityTrees", "redactSecrets", "assertions"}, errors, "privacy")
+    screenshots_policy = require_string(privacy, "screenshots", errors, "privacy")
+    if screenshots_policy and screenshots_policy not in {"none", "sterile-only"}:
+        errors.append("privacy.screenshots must be none or sterile-only")
+    raw_ax = require_bool(privacy, "rawAccessibilityTrees", errors, "privacy")
+    redact = require_bool(privacy, "redactSecrets", errors, "privacy")
+    if raw_ax:
+        errors.append("privacy.rawAccessibilityTrees must be false for public fixture UI smoke receipts")
+    if not redact:
+        errors.append("privacy.redactSecrets must be true")
+    assertions = privacy.get("assertions")
+    if not isinstance(assertions, list) or not assertions or not all(isinstance(item, str) and item for item in assertions):
+        errors.append("privacy.assertions must be a non-empty list of strings")
+
+    artifacts = evidence.get("artifacts")
+    if not isinstance(artifacts, list):
+        errors.append("evidence.artifacts must be a list")
+    else:
+        for index, artifact in enumerate(artifacts):
+            path = f"evidence.artifacts[{index}]"
+            if not isinstance(artifact, dict):
+                errors.append(f"{path} must be an object")
+                continue
+            validate_artifact_reference(artifact, errors, path)
+            artifact_path = str(artifact.get("path", "")).lower()
+            label = str(artifact.get("label", "")).lower()
+            looks_like_image = looks_like_image_path(artifact_path) or "screenshot" in label
+            if looks_like_image and screenshots_policy != "sterile-only":
+                errors.append(f"{path} appears to be a screenshot but privacy.screenshots is not sterile-only")
+
+    withheld = evidence.get("withheld")
+    if not isinstance(withheld, list):
+        errors.append("evidence.withheld must be a list")
+    else:
+        for index, artifact in enumerate(withheld):
+            path = f"evidence.withheld[{index}]"
+            if not isinstance(artifact, dict):
+                errors.append(f"{path} must be an object")
+                continue
+            reject_unknown_keys(artifact, {"label", "reason"}, errors, path)
+            require_string(artifact, "label", errors, path)
+            require_string(artifact, "reason", errors, path)
+
+    disproof = require_string(receipt, "strongestAttemptedDisproof", errors, "root")
+    if disproof and len(disproof) > 500:
+        errors.append("strongestAttemptedDisproof must be 500 characters or fewer")
 
     return errors
 
@@ -500,16 +719,7 @@ def validate_manual_remote_receipt_data(receipt: dict[str, Any]) -> list[str]:
             if not isinstance(artifact, dict):
                 errors.append(f"{path} must be an object")
                 continue
-            reject_unknown_keys(artifact, {"label", "path", "sha256", "sizeBytes"}, errors, path)
-            require_string(artifact, "label", errors, path)
-            artifact_path = require_string(artifact, "path", errors, path)
-            if artifact_path.startswith("/") or artifact_path.startswith("~") or ".." in Path(artifact_path).parts:
-                errors.append(f"{path}.path must be a relative sanitized path or storage ID")
-            sha256 = require_string(artifact, "sha256", errors, path)
-            if sha256 and not re.fullmatch(r"^[0-9a-fA-F]{64}$", sha256):
-                errors.append(f"{path}.sha256 must be a SHA-256 hex digest")
-            if not is_integer(artifact.get("sizeBytes")) or artifact.get("sizeBytes") < 0:
-                errors.append(f"{path}.sizeBytes must be a non-negative integer")
+            validate_artifact_reference(artifact, errors, path)
 
     withheld = artifacts.get("withheld")
     if not isinstance(withheld, list):
@@ -538,22 +748,48 @@ def load_and_validate_adapter(path: Path) -> tuple[dict[str, Any] | None, list[s
     return adapter, validate_adapter_data(adapter)
 
 
-def redact_value(key: str, value: Any) -> Any:
-    if SECRET_KEY_RE.search(key):
-        return "<redacted>"
-    if isinstance(value, dict):
-        return {nested_key: redact_value(nested_key, nested_value) for nested_key, nested_value in value.items()}
-    if isinstance(value, list):
-        return [redact_value(key, item) for item in value]
-    return value
+def summarize_ci(ci: Any) -> dict[str, Any]:
+    if not isinstance(ci, dict):
+        return {"configured": False}
+    return {
+        "configured": bool(ci),
+        "macosRunnerConfigured": bool(ci.get("macosRunner")),
+        "macosRunnerLabelCount": len(ci.get("macosRunnerLabels") or []),
+        "physicalRunnerLabelCount": len(ci.get("physicalRunnerLabels") or []),
+    }
+
+
+def summarize_privacy(privacy: Any) -> dict[str, Any]:
+    if not isinstance(privacy, dict):
+        return {"configured": False}
+    return {
+        "configured": bool(privacy),
+        "redactSecrets": privacy.get("redactSecrets") is True,
+        "screenshots": privacy.get("screenshots") if privacy.get("screenshots") in {"none", "sterile-only"} else "unspecified",
+    }
+
+
+def summarize_automation(automation: Any) -> dict[str, Any]:
+    if not isinstance(automation, dict):
+        return {"configured": False}
+    return {
+        "configured": bool(automation),
+        "fixtureBundleIdentifierConfigured": bool(automation.get("fixtureBundleIdentifier")),
+        "fixtureSmokeCommandConfigured": bool(automation.get("fixtureSmokeCommand")),
+        "logSubsystemConfigured": bool(automation.get("logSubsystem")),
+        "fixtureReceiptPathConfigured": bool(automation.get("fixtureReceiptPath")),
+        "allowedEvidenceCount": len(automation.get("allowedEvidence") or []),
+        "allowedArtifactGlobCount": len(automation.get("allowedArtifactGlobs") or []),
+    }
 
 
 def summarize_adapter(adapter: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": adapter.get("name"),
         "platforms": sorted((adapter.get("platforms") or {}).keys()),
-        "ci": redact_value("ci", adapter.get("ci", {})),
-        "privacy": redact_value("privacy", adapter.get("privacy", {})),
+        "ci": summarize_ci(adapter.get("ci")),
+        "automation": summarize_automation(adapter.get("automation")),
+        "privacy": summarize_privacy(adapter.get("privacy")),
     }
 
 
@@ -622,6 +858,155 @@ def command_validate_manual_remote_receipt_path(path: Path, *, json_output: bool
         })
     else:
         print(f"valid manual remote PR receipt: {receipt['requestId']}")
+    return 0
+
+
+def command_validate_fixture_ui_smoke_receipt_path(path: Path, *, json_output: bool = False) -> int:
+    receipt, errors = load_json_file(path)
+    if receipt is not None:
+        errors.extend(validate_fixture_ui_smoke_receipt_data(receipt))
+    if errors:
+        if json_output:
+            emit_json({"ok": False, "path": str(path), "errors": errors})
+        else:
+            for error in errors:
+                eprint(f"error: {error}")
+        return 1
+    assert receipt is not None
+    if json_output:
+        emit_json({
+            "ok": True,
+            "path": str(path),
+            "result": receipt.get("result"),
+            "fixtureBundleIdentifier": (receipt.get("target") or {}).get("fixtureBundleIdentifier"),
+            "physical_device_actions": bool((receipt.get("target") or {}).get("physicalDeviceActions")),
+        })
+    else:
+        print(f"valid fixture UI smoke receipt: {(receipt.get('target') or {}).get('fixtureBundleIdentifier')}")
+    return 0
+
+
+def build_fixture_ui_smoke_plan(adapter: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    errors: list[str] = []
+    automation = require_object(adapter, "automation", errors, "adapter")
+    privacy = require_object(adapter, "privacy", errors, "adapter")
+
+    fixture_bundle = require_string(automation, "fixtureBundleIdentifier", errors, "adapter.automation")
+    fixture_command = require_string(automation, "fixtureSmokeCommand", errors, "adapter.automation")
+    log_subsystem = require_string(automation, "logSubsystem", errors, "adapter.automation")
+
+    raw_ax = require_bool(privacy, "rawAccessibilityTrees", errors, "adapter.privacy")
+    redact = require_bool(privacy, "redactSecrets", errors, "adapter.privacy")
+    screenshots = require_string(privacy, "screenshots", errors, "adapter.privacy")
+    if raw_ax:
+        errors.append("adapter.privacy.rawAccessibilityTrees must be false")
+    if not redact:
+        errors.append("adapter.privacy.redactSecrets must be true")
+    if screenshots and screenshots not in {"none", "sterile-only"}:
+        errors.append("adapter.privacy.screenshots must be none or sterile-only")
+
+    receipt_path = automation.get("fixtureReceiptPath") or "artifacts/fixture-ui-smoke/fixture-ui-smoke.receipt.json"
+    if not isinstance(receipt_path, str) or not receipt_path:
+        errors.append("adapter.automation.fixtureReceiptPath must be a non-empty string when present")
+        receipt_path = ""
+    elif receipt_path:
+        reject_unsafe_relative_path(receipt_path, "adapter.automation.fixtureReceiptPath", errors)
+
+    allowed_globs = automation.get("allowedArtifactGlobs") or [receipt_path]
+    if not isinstance(allowed_globs, list) or not all(isinstance(item, str) and item for item in allowed_globs):
+        errors.append("adapter.automation.allowedArtifactGlobs must be a list of non-empty strings")
+        allowed_globs = []
+    else:
+        allowed_evidence = automation.get("allowedEvidence") or []
+        for glob in allowed_globs:
+            reject_unsafe_relative_path(glob, "adapter.automation.allowedArtifactGlobs", errors)
+            if looks_like_image_path(glob):
+                if screenshots != "sterile-only":
+                    errors.append("adapter.automation.allowedArtifactGlobs must not include image globs unless privacy.screenshots is sterile-only")
+                if "sterile-screenshots" not in allowed_evidence:
+                    errors.append("adapter.automation.allowedArtifactGlobs must not include image globs unless automation.allowedEvidence includes sterile-screenshots")
+
+    artifact_paths = list(dict.fromkeys([receipt_path, *allowed_globs] if receipt_path else allowed_globs))
+    return (
+        {
+            "fixtureBundleIdentifier": fixture_bundle,
+            "fixtureSmokeCommand": fixture_command,
+            "logSubsystem": log_subsystem,
+            "receiptPath": receipt_path,
+            "artifactPaths": artifact_paths,
+            "physical_device_actions": False,
+        },
+        errors,
+    )
+
+
+def write_github_output(path: Path, plan: dict[str, Any]) -> None:
+    artifact_paths = plan.get("artifactPaths") or []
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"receipt_path={plan.get('receiptPath', '')}\n")
+        handle.write("artifact_paths<<EOF\n")
+        handle.write("\n".join(str(item) for item in artifact_paths))
+        handle.write("\nEOF\n")
+
+
+def command_prepare_fixture_ui_smoke(args: argparse.Namespace) -> int:
+    if args.approval is not None and args.approval != "fixture-ui-smoke":
+        message = "approval must exactly equal fixture-ui-smoke"
+        if args.json:
+            emit_json({"ok": False, "errors": [message]})
+        else:
+            eprint(f"error: {message}")
+        return 1
+
+    adapter_path = Path(args.adapter).expanduser().resolve()
+    adapter, errors = load_and_validate_adapter(adapter_path)
+    plan: dict[str, Any] = {}
+    if adapter is not None:
+        plan, plan_errors = build_fixture_ui_smoke_plan(adapter)
+        errors.extend(plan_errors)
+
+    if errors:
+        if args.json:
+            emit_json({"ok": False, "path": str(adapter_path), "errors": errors})
+        else:
+            for error in errors:
+                eprint(f"error: {error}")
+        return 1
+
+    assert adapter is not None
+    script_path = Path(args.script).expanduser().resolve()
+    script_path.parent.mkdir(parents=True, exist_ok=True)
+    script_lines = [
+        "#!/bin/bash",
+        "set -euo pipefail",
+        f"export AAK_FIXTURE_RECEIPT_PATH={shlex.quote(str(plan['receiptPath']))}",
+        f"export AAK_FIXTURE_BUNDLE_ID={shlex.quote(str(plan['fixtureBundleIdentifier']))}",
+        f"export AAK_FIXTURE_LOG_SUBSYSTEM={shlex.quote(str(plan['logSubsystem']))}",
+        str(plan["fixtureSmokeCommand"]),
+        "",
+    ]
+    script_path.write_text(
+        "\n".join(script_lines),
+        encoding="utf-8",
+    )
+    script_path.chmod(0o700)
+    plan["scriptPath"] = str(script_path)
+
+    if args.github_output:
+        write_github_output(Path(args.github_output).expanduser().resolve(), plan)
+
+    if args.json:
+        emit_json({
+            "ok": True,
+            "path": str(adapter_path),
+            "plan": {
+                "artifactCount": len(plan.get("artifactPaths") or []),
+                "physical_device_actions": False,
+                "receiptPathConfigured": bool(plan.get("receiptPath")),
+            },
+        })
+    else:
+        print(f"prepared fixture UI smoke command: {script_path}")
     return 0
 
 
@@ -740,7 +1125,7 @@ def render_text(template_name: str, text: str, adapter: dict[str, Any]) -> str:
     if template_name == "ios-physical-device.yml":
         label_text = "[" + ", ".join(physical_labels) + "]"
         text = re.sub(r"runs-on: \[[^\n]+\]", f"runs-on: {label_text}", text)
-    if template_name in {"macos-runner-health.yml", "macos-ci-eligibility.yml"}:
+    if template_name in {"macos-runner-health.yml", "macos-ci-eligibility.yml", "macos-fixture-ui-smoke.yml"}:
         label_text = "[" + ", ".join(macos_runner_labels) + "]"
         text = re.sub(r"runs-on: \[[^\n]+\]", f"runs-on: {label_text}", text)
     return text
@@ -942,6 +1327,27 @@ def build_parser() -> argparse.ArgumentParser:
     manual_receipt_parser.set_defaults(
         func=lambda args: command_validate_manual_remote_receipt_path(Path(args.path), json_output=args.json)
     )
+
+    fixture_receipt_parser = subparsers.add_parser(
+        "validate-fixture-ui-smoke-receipt",
+        help="Validate a fixture UI smoke proof receipt JSON file.",
+    )
+    fixture_receipt_parser.add_argument("path", help="Fixture UI smoke receipt JSON path.")
+    fixture_receipt_parser.add_argument("--json", action="store_true", help="Emit JSON.")
+    fixture_receipt_parser.set_defaults(
+        func=lambda args: command_validate_fixture_ui_smoke_receipt_path(Path(args.path), json_output=args.json)
+    )
+
+    fixture_prepare_parser = subparsers.add_parser(
+        "prepare-fixture-ui-smoke",
+        help="Prepare a fixture UI smoke command script and artifact outputs from an adapter.",
+    )
+    fixture_prepare_parser.add_argument("--adapter", required=True, help="Adapter JSON path.")
+    fixture_prepare_parser.add_argument("--script", required=True, help="Output shell script path.")
+    fixture_prepare_parser.add_argument("--github-output", help="Optional GITHUB_OUTPUT file to populate.")
+    fixture_prepare_parser.add_argument("--approval", help="Optional approval token; must be fixture-ui-smoke when present.")
+    fixture_prepare_parser.add_argument("--json", action="store_true", help="Emit JSON.")
+    fixture_prepare_parser.set_defaults(func=command_prepare_fixture_ui_smoke)
 
     render_parser = subparsers.add_parser("render-workflows", help="Render workflow templates from an adapter.")
     render_parser.add_argument("--adapter", required=True, help="Adapter JSON path.")

@@ -23,6 +23,18 @@
     "macosRunnerLabels": ["self-hosted", "macOS", "apple-agent-kit"],
     "physicalRunnerLabels": ["self-hosted", "macOS", "ios-physical"]
   },
+  "automation": {
+    "fixtureBundleIdentifier": "com.example.app.fixture",
+    "fixtureSmokeCommand": "make fixture-ui-smoke",
+    "logSubsystem": "com.example.app.fixture",
+    "allowedEvidence": ["logs", "sterile-screenshots"],
+    "fixtureReceiptPath": "artifacts/fixture-ui-smoke/fixture-ui-smoke.receipt.json",
+    "allowedArtifactGlobs": [
+      "artifacts/fixture-ui-smoke/fixture-ui-smoke.receipt.json",
+      "artifacts/fixture-ui-smoke/*.log",
+      "artifacts/fixture-ui-smoke/*.png"
+    ]
+  },
   "manualRemotePrSession": {
     "enabled": false,
     "queueProvider": "github-actions-artifact",
