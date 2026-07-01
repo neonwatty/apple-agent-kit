@@ -149,7 +149,7 @@ jobs:
             --output artifacts/aak-render \
             --force
       - name: Xcode readiness
-        run: python3 .aak/apple-agent-kit/scripts/aak.py check-xcode --json
+        run: python3 .aak/apple-agent-kit/scripts/aak.py check-xcode --adapter .apple-agent-kit.json --platform ios --json
       - name: Device-free assertion
         run: |
           set -euo pipefail
@@ -193,6 +193,7 @@ The expected result is no matches.
 Before calling the rollout complete, collect proof that tries to disprove the change:
 
 - Adapter validation passed.
+- Xcode readiness reported privacy-safe simulator destination eligibility.
 - Render receipt reports `"physical_device_actions": false`.
 - Installed workflow YAML parses.
 - Installed workflow asserts the iOS-only adapter shape.

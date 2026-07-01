@@ -55,6 +55,18 @@ python3 path/to/apple-agent-kit/scripts/aak.py validate-fixture-ui-smoke-receipt
   --json
 ```
 
+Before dispatching the workflow, verify the configured simulator destination without booting or touching devices:
+
+```bash
+python3 path/to/apple-agent-kit/scripts/aak.py check-xcode \
+  --adapter .apple-agent-kit.json \
+  --platform ios \
+  --require-simulator-destination \
+  --json
+```
+
+The destination may use either `name=` or `id=`. The destination summary reports only privacy-safe booleans and counts, such as whether a matching simulator is available. It does not publish simulator names, UDIDs, host paths, screenshots, or raw device inventories.
+
 Use `templates/fixture-ui-smoke-command.example.sh` as the receipt-writing scaffold. For iOS, replace the marked probe section with deterministic simulator build/install/launch or XCTest UI steps against the fixture app only.
 
 ## Workflow Installation
@@ -65,7 +77,7 @@ Use `templates/fixture-ui-smoke-command.example.sh` as the receipt-writing scaff
 4. Store the private adapter in `APPLE_AGENT_KIT_ADAPTER_JSON`.
 5. Dispatch the workflow manually and type `fixture-ui-smoke` in the approval input.
 
-The workflow validates the adapter, prepares the fixture command for `platform=ios`, checks Xcode readiness, runs only the private fixture command, validates the fixture receipt, asserts the simulator boundary, uploads the receipt for diagnosis, and uploads adapter-allowlisted evidence only after receipt validation succeeds.
+The workflow validates the adapter, prepares the fixture command for `platform=ios`, checks Xcode readiness, removes any pre-existing receipt at the configured path, runs only the private fixture command, validates the fixture receipt even after a failed smoke command, asserts the simulator boundary when the receipt is valid, always uploads the receipt for diagnosis when the path is known, and uploads adapter-allowlisted evidence only after receipt validation succeeds. A failed smoke can still publish diagnostic evidence when the private command writes a valid privacy-safe failed receipt during that run.
 
 ## Privacy Rules
 
@@ -80,6 +92,7 @@ The workflow validates the adapter, prepares the fixture command for `platform=i
 Do not promote from simulator fixture smoke to physical-device automation until:
 
 - The same fixture receipt passes on the default branch.
+- The configured simulator destination is available according to `check-xcode --adapter ... --require-simulator-destination --json`.
 - The expected fixture events are present in logs or result bundles.
 - The receipt states `adapter.platform` is `ios`.
 - Physical-device actions are explicitly excluded.

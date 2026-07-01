@@ -42,6 +42,7 @@ python3 scripts/aak.py inspect --repo . --adapter templates/adapter.example.json
 python3 scripts/aak.py validate-adapter templates/adapter.example.json
 python3 scripts/aak.py render-workflows --adapter templates/adapter.example.json --output /tmp/aak-render --force
 python3 scripts/aak.py check-xcode --json
+python3 scripts/aak.py check-xcode --adapter templates/adapter.example.json --platform ios --json
 python3 scripts/aak.py summarize-xcresult path/to/TestResults.xcresult --json
 python3 scripts/aak.py prepare-fixture-ui-smoke --adapter templates/adapter.example.json --script /tmp/aak-fixture-smoke.sh --approval fixture-ui-smoke --json
 python3 scripts/aak.py prepare-fixture-ui-smoke --adapter templates/adapter.example.json --script /tmp/aak-ios-fixture-smoke.sh --approval fixture-ui-smoke --platform ios --json
@@ -58,9 +59,9 @@ The rendered workflow set includes device-free eligibility templates:
 
 - `macos-runner-health.yml` checks a specific Mac runner on demand.
 - `macos-ci-eligibility.yml` validates a private adapter, renders reusable workflows into scratch space, and checks Xcode readiness without building or testing the product.
-- `macos-fixture-ui-smoke.yml` manually runs a private sterile fixture smoke command, validates its receipt, and uploads only allowlisted evidence.
-- `ios-ci-eligibility.yml` validates a private iOS adapter, renders reusable workflows into scratch space, checks Xcode readiness, and inventories simulators without building, testing, booting, installing, launching, screenshotting, or touching physical devices.
-- `ios-simulator-fixture-ui-smoke.yml` manually runs a private sterile simulator fixture command, validates its receipt, and uploads only receipt-proven allowlisted evidence.
+- `macos-fixture-ui-smoke.yml` manually runs a private sterile fixture smoke command, removes stale receipts, validates its receipt, and uploads only receipt-validated allowlisted evidence, including failure evidence when the private command writes a valid failed receipt during that run.
+- `ios-ci-eligibility.yml` validates a private iOS adapter, renders reusable workflows into scratch space, checks Xcode readiness, and inventories simulators without building, testing, booting, installing, launching, screenshotting, or touching physical devices. Use `check-xcode --adapter <adapter> --platform ios --require-simulator-destination --json` when an adoption proof should fail on an unavailable configured simulator destination.
+- `ios-simulator-fixture-ui-smoke.yml` manually runs a private sterile simulator fixture command, removes stale receipts, validates its receipt, and uploads only receipt-validated allowlisted evidence, including failure evidence when the private command writes a valid failed receipt during that run.
 
 Bind the self-hosted Mac lanes with private `ci.macosRunnerLabels`; keep physical iPhone workflows behind a separate approval gate.
 

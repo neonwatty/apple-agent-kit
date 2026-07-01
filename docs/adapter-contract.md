@@ -101,6 +101,8 @@ The optional `automation` object describes sterile GUI smoke hooks for private r
 
 For iOS simulator fixture smoke, `platforms.ios.simulatorDestination` must be set. `prepare-fixture-ui-smoke --platform ios` exports the destination as `AAK_FIXTURE_SIMULATOR_DESTINATION` so the private command does not guess a device.
 
+Use `check-xcode --adapter .apple-agent-kit.json --platform ios --json` to summarize whether the configured destination appears in the available simulator inventory without booting, installing, launching, screenshotting, or touching physical devices. Add `--require-simulator-destination` when adoption proof should fail if the configured simulator destination is unavailable. The JSON summary intentionally reports booleans and counts instead of simulator names or UDIDs.
+
 Use `templates/fixture-ui-smoke.receipt.example.json` or `templates/ios-simulator-fixture-ui-smoke.receipt.example.json` when recording a fixture smoke proof. Keep filled receipts private if they include product-specific paths, log excerpts, bundle identifiers, result bundle internals, or screenshots.
 
 Use `templates/fixture-ui-smoke-command.example.sh` as a private-repo starting point for writing the receipt and sanitized log artifact. Replace only the probe section with app-specific fixture automation; keep raw accessibility trees, host paths, account data, and non-fixture screenshots out of the receipt.

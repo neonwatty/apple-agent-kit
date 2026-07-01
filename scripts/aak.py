@@ -1209,6 +1209,92 @@ def run_command(command: list[str], timeout: int = 20) -> tuple[int, str, str]:
     return completed.returncode, completed.stdout, completed.stderr
 
 
+def parse_destination_components(destination: str) -> dict[str, str]:
+    components: dict[str, str] = {}
+    for part in destination.split(","):
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if key and value:
+            components[key] = value
+    return components
+
+
+def parse_available_simulators(output: str) -> list[dict[str, str]]:
+    devices: list[dict[str, str]] = []
+    current_runtime = "unknown"
+    device_re = re.compile(r"^\s{4}(.+?) \(([A-Fa-f0-9-]{36})\) \(([^)]+)\)")
+    for line in output.splitlines():
+        if line.startswith("-- ") and line.endswith(" --"):
+            current_runtime = line.strip("- ")
+            continue
+        match = device_re.match(line)
+        if match:
+            devices.append({
+                "runtime": current_runtime,
+                "name": match.group(1),
+                "id": match.group(2).upper(),
+                "state": match.group(3),
+            })
+    return devices
+
+
+def summarize_simulator_destination(destination: str, simctl_output: str, simctl_status: int) -> dict[str, Any]:
+    if not destination:
+        return {
+            "configured": False,
+            "platform": "unconfigured",
+            "nameConfigured": False,
+            "idConfigured": False,
+            "osConfigured": False,
+            "available": False,
+            "matchCount": 0,
+            "availableRuntimeCount": 0,
+            "availableDeviceCount": 0,
+            "errors": [],
+        }
+
+    components = parse_destination_components(destination)
+    platform_value = components.get("platform", "")
+    name = components.get("name", "")
+    simulator_id = components.get("id", "")
+    os_value = components.get("OS", "")
+    errors: list[str] = []
+
+    if platform_value != "iOS Simulator":
+        errors.append("destination.platform must be iOS Simulator")
+    if not name and not simulator_id:
+        errors.append("destination.name or destination.id is required")
+
+    devices = parse_available_simulators(simctl_output) if simctl_status == 0 else []
+    ios_devices = [device for device in devices if device["runtime"].startswith("iOS ")]
+    runtimes = sorted({device["runtime"] for device in ios_devices})
+    matches = [
+        device
+        for device in ios_devices
+        if (
+            (simulator_id and device["id"].upper() == simulator_id.upper())
+            or (not simulator_id and device["name"] == name)
+        )
+        and (not os_value or os_value == "latest" or device["runtime"] == f"iOS {os_value}")
+    ]
+
+    return {
+        "configured": bool(destination),
+        "platform": platform_value if platform_value in {"iOS Simulator"} else "unsupported",
+        "nameConfigured": bool(name),
+        "idConfigured": bool(simulator_id),
+        "osConfigured": bool(os_value),
+        "available": bool(matches),
+        "matchCount": len(matches),
+        "availableRuntimeCount": len(runtimes),
+        "availableDeviceCount": len(ios_devices),
+        "errors": errors,
+    }
+
+
 def command_check_xcode(args: argparse.Namespace) -> int:
     payload: dict[str, Any] = {
         "ok": True,
@@ -1234,8 +1320,12 @@ def command_check_xcode(args: argparse.Namespace) -> int:
         payload["ok"] = False
 
     runtime_counts: dict[str, int] = {}
+    simctl_stdout = ""
+    simctl_status = 127
     if payload["tools"]["xcrun"]:
         status, stdout, stderr = run_command(["xcrun", "simctl", "list", "devices", "available"], timeout=30)
+        simctl_stdout = stdout
+        simctl_status = status
         current_runtime = "unknown"
         for line in stdout.splitlines():
             if line.startswith("-- ") and line.endswith(" --"):
@@ -1252,6 +1342,38 @@ def command_check_xcode(args: argparse.Namespace) -> int:
         payload["simulators"] = {"status": 127, "runtime_device_counts": {}, "error": "xcrun not found"}
         payload["ok"] = False
 
+    if args.adapter:
+        adapter_path = Path(args.adapter).expanduser().resolve()
+        adapter, adapter_errors = load_and_validate_adapter(adapter_path)
+        destination = ""
+        if adapter_errors:
+            payload["adapter"] = {"ok": False, "errors": adapter_errors}
+            payload["ok"] = False
+        elif args.platform != "ios":
+            payload["adapter"] = {
+                "ok": True,
+                "platform": args.platform,
+                "simulatorDestination": {"configured": False},
+                "physical_device_actions": False,
+            }
+        else:
+            assert adapter is not None
+            platform_config = (adapter.get("platforms") or {}).get(args.platform)
+            if isinstance(platform_config, dict):
+                destination_value = platform_config.get("simulatorDestination")
+                destination = destination_value if isinstance(destination_value, str) else ""
+            destination_summary = summarize_simulator_destination(destination, simctl_stdout, simctl_status)
+            payload["adapter"] = {
+                "ok": not destination_summary["errors"],
+                "platform": args.platform,
+                "simulatorDestination": destination_summary,
+                "physical_device_actions": False,
+            }
+            if destination_summary["errors"]:
+                payload["ok"] = False
+            if args.require_simulator_destination and not destination_summary["available"]:
+                payload["ok"] = False
+
     if args.json:
         emit_json(payload)
     else:
@@ -1264,6 +1386,14 @@ def command_check_xcode(args: argparse.Namespace) -> int:
         print("simulator runtimes:")
         for runtime, count in sorted(runtime_counts.items()):
             print(f"  {runtime}: {count}")
+        adapter_summary = payload.get("adapter")
+        if isinstance(adapter_summary, dict) and isinstance(adapter_summary.get("simulatorDestination"), dict):
+            destination_summary = adapter_summary["simulatorDestination"]
+            print(
+                "adapter simulator destination: "
+                f"configured={destination_summary['configured']} available={destination_summary['available']} "
+                f"matches={destination_summary['matchCount']}"
+            )
     return 0 if payload["ok"] else 69
 
 
@@ -1384,6 +1514,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     xcode_parser = subparsers.add_parser("check-xcode", help="Summarize local Xcode readiness without device actions.")
     xcode_parser.add_argument("--json", action="store_true", help="Emit JSON.")
+    xcode_parser.add_argument("--adapter", help="Optional adapter JSON path for simulator destination eligibility checks.")
+    xcode_parser.add_argument("--platform", choices=["ios", "macos"], default="ios", help="Adapter platform to inspect.")
+    xcode_parser.add_argument(
+        "--require-simulator-destination",
+        action="store_true",
+        help="Fail when the adapter's iOS simulator destination is not available.",
+    )
     xcode_parser.set_defaults(func=command_check_xcode)
 
     xcresult_parser = subparsers.add_parser("summarize-xcresult", help="Summarize an existing xcresult bundle.")

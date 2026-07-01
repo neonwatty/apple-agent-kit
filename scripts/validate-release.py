@@ -71,6 +71,7 @@ FORBIDDEN_TEXT = [
 
 FORBIDDEN_PATH_PARTS = {
     ".git",
+    ".goalbuddy-board",
     "__pycache__",
     "DerivedData",
     "build",
@@ -132,6 +133,20 @@ def check_required_files() -> None:
     )
     if tracked_goals.stdout.strip():
         fail("docs/goals must not be tracked in the public v0 release tree")
+    tracked_files = subprocess.run(
+        ["git", "ls-files"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    tracked_goalbuddy_boards = [
+        path
+        for path in tracked_files.stdout.splitlines()
+        if ".goalbuddy-board" in Path(path).parts
+    ]
+    if tracked_goalbuddy_boards:
+        fail(".goalbuddy-board must not be tracked in the public v0 release tree")
 
 
 def check_manifests() -> None:
@@ -221,19 +236,40 @@ def check_cli() -> None:
         fixture_workflow = Path(output) / "macos-fixture-ui-smoke.yml"
         if not fixture_workflow.is_file():
             fail("fixture UI smoke workflow was not rendered")
-        if "runs-on: [self-hosted, macOS, apple-agent-kit]" not in fixture_workflow.read_text(encoding="utf-8"):
+        fixture_workflow_text = fixture_workflow.read_text(encoding="utf-8")
+        if "runs-on: [self-hosted, macOS, apple-agent-kit]" not in fixture_workflow_text:
             fail("fixture UI smoke workflow did not render macOS runner labels")
+        if "id: validate-fixture-receipt" not in fixture_workflow_text:
+            fail("fixture UI smoke workflow must identify the receipt validation step")
+        if "Reset fixture UI smoke receipt" not in fixture_workflow_text:
+            fail("fixture UI smoke workflow must remove stale receipts before running")
+        if "steps.validate-fixture-receipt.outcome == 'success'" not in fixture_workflow_text:
+            fail("fixture UI smoke workflow must gate evidence upload on receipt validation")
         ios_fixture_workflow = Path(output) / "ios-simulator-fixture-ui-smoke.yml"
         if not ios_fixture_workflow.is_file():
             fail("iOS simulator fixture UI smoke workflow was not rendered")
-        if "runs-on: macos-15" not in ios_fixture_workflow.read_text(encoding="utf-8"):
+        ios_fixture_workflow_text = ios_fixture_workflow.read_text(encoding="utf-8")
+        if "runs-on: macos-15" not in ios_fixture_workflow_text:
             fail("iOS simulator fixture UI smoke workflow did not render macOS runner")
+        if "id: validate-fixture-receipt" not in ios_fixture_workflow_text:
+            fail("iOS simulator fixture UI smoke workflow must identify the receipt validation step")
+        if "Reset fixture UI smoke receipt" not in ios_fixture_workflow_text:
+            fail("iOS simulator fixture UI smoke workflow must remove stale receipts before running")
+        if "steps.validate-fixture-receipt.outcome == 'success'" not in ios_fixture_workflow_text:
+            fail("iOS simulator fixture UI smoke workflow must gate evidence upload on receipt validation")
+        ios_eligibility_workflow = Path(output) / "ios-ci-eligibility.yml"
+        if not ios_eligibility_workflow.is_file():
+            fail("iOS eligibility workflow was not rendered")
+        if "check-xcode --adapter .apple-agent-kit.json --platform ios --json" not in ios_eligibility_workflow.read_text(encoding="utf-8"):
+            fail("iOS eligibility workflow must render adapter-aware Xcode readiness")
 
 
 def iter_public_text_files() -> list[Path]:
     files: list[Path] = []
     for path in ROOT.rglob("*"):
         rel_parts = path.relative_to(ROOT).parts
+        if rel_parts[:2] == ("docs", "goals"):
+            continue
         if any(part in FORBIDDEN_PATH_PARTS for part in rel_parts):
             continue
         if path.is_file() and path.suffix in TEXT_EXTENSIONS:
