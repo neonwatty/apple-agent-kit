@@ -65,7 +65,7 @@ jobs:
             --force
 
       - name: Xcode readiness
-        run: python3 .aak/apple-agent-kit/scripts/aak.py check-xcode --json
+        run: python3 .aak/apple-agent-kit/scripts/aak.py check-xcode --adapter .apple-agent-kit.json --platform ios --json
 
       - name: Simulator inventory
         run: |

@@ -50,7 +50,7 @@ Use `templates/fixture-ui-smoke-command.example.sh` as the starting point for th
 4. Store the private adapter in `APPLE_AGENT_KIT_ADAPTER_JSON`.
 5. Dispatch the workflow manually and type `fixture-ui-smoke` in the approval input.
 
-The workflow validates the adapter, checks Xcode readiness, runs only the private fixture command, validates the fixture receipt, asserts the device boundary, and uploads only the receipt plus adapter-allowlisted artifacts.
+The workflow validates the adapter, checks Xcode readiness, removes any pre-existing receipt at the configured path, runs only the private fixture command, validates the fixture receipt even after a failed smoke command, asserts the device boundary when the receipt is valid, always uploads the receipt for diagnosis when the path is known, and uploads adapter-allowlisted evidence only after receipt validation succeeds. A failed smoke can still publish diagnostic evidence when the private command writes a valid privacy-safe failed receipt during that run.
 
 ## Privacy Rules
 

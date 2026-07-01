@@ -17,19 +17,21 @@ Use this skill when iOS automation should prove GUI behavior on a simulator with
 
 ## Pattern
 
-1. Validate the adapter and prepare the fixture command with `--platform ios`.
-2. Confirm the fixture target is not a live app/account surface.
-3. Use the adapter-provided simulator destination and avoid physical-device commands.
-4. Build, install, launch, or test only the fixture app or demo mode named by the adapter.
-5. Prefer XCTest UI tests, stable accessibility identifiers, or deterministic simulator commands over natural-language agent flows.
-6. Collect bounded evidence: result bundle paths, sanitized command summaries, fixture log counts, hashes, and sterile screenshots only when allowed.
-7. Write a fixture UI smoke receipt with `adapter.platform` set to `ios`.
+1. Validate the adapter and check the configured simulator destination with `check-xcode --adapter <adapter> --platform ios --require-simulator-destination --json`.
+2. Prepare the fixture command with `--platform ios`.
+3. Confirm the fixture target is not a live app/account surface.
+4. Use the adapter-provided simulator destination and avoid physical-device commands.
+5. Build, install, launch, or test only the fixture app or demo mode named by the adapter.
+6. Prefer XCTest UI tests, stable accessibility identifiers, or deterministic simulator commands over natural-language agent flows.
+7. Collect bounded evidence: result bundle paths, sanitized command summaries, fixture log counts, hashes, and sterile screenshots only when allowed.
+8. Write a fixture UI smoke receipt with `adapter.platform` set to `ios`.
 
 ## Verification
 
 Before declaring success, try to disprove the smoke:
 
 - Confirm the simulator destination came from the adapter.
+- Confirm `check-xcode --adapter <adapter> --platform ios --require-simulator-destination --json` matched the configured simulator destination without requiring a boot.
 - Confirm the expected fixture bundle identifier or demo mode was the target.
 - Confirm at least one expected UI event appeared in logs or the result bundle.
 - Confirm no personal screenshots, raw private accessibility trees, private URLs, UDIDs, or unredacted identifiers were captured.

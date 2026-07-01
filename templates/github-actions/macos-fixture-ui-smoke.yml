@@ -55,10 +55,26 @@ jobs:
       - name: Xcode readiness
         run: python3 .aak/apple-agent-kit/scripts/aak.py check-xcode --json
 
+      - name: Reset fixture UI smoke receipt
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import os
+          from pathlib import Path
+
+          receipt = os.environ.get("AAK_FIXTURE_RECEIPT_PATH", "")
+          if receipt:
+              Path(receipt).unlink(missing_ok=True)
+          PY
+        env:
+          AAK_FIXTURE_RECEIPT_PATH: ${{ steps.fixture.outputs.receipt_path }}
+
       - name: Run fixture UI smoke command
         run: bash .aak/fixture-ui-smoke-command.sh
 
       - name: Validate fixture UI smoke receipt
+        id: validate-fixture-receipt
+        if: ${{ always() && steps.fixture.outputs.receipt_path != '' }}
         run: |
           set -euo pipefail
           python3 .aak/apple-agent-kit/scripts/aak.py validate-fixture-ui-smoke-receipt \
@@ -66,6 +82,7 @@ jobs:
             --json
 
       - name: Device boundary assertion
+        if: ${{ always() && steps.validate-fixture-receipt.outcome == 'success' }}
         run: |
           set -euo pipefail
           echo "No physical-device actions, personal-app automation, raw private accessibility trees, or non-fixture screenshots are allowed by this workflow."
@@ -80,7 +97,7 @@ jobs:
           retention-days: 14
 
       - name: Upload fixture UI smoke evidence
-        if: ${{ success() }}
+        if: ${{ always() && steps.fixture.outputs.artifact_paths != '' && steps.validate-fixture-receipt.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: fixture-ui-smoke-evidence
