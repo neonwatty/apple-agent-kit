@@ -6,6 +6,7 @@ set -euo pipefail
 
 receipt_path="${AAK_FIXTURE_RECEIPT_PATH:-artifacts/fixture-ui-smoke/fixture-ui-smoke.receipt.json}"
 log_path="${AAK_FIXTURE_LOG_PATH:-artifacts/fixture-ui-smoke/fixture.log}"
+fixture_platform="${AAK_FIXTURE_PLATFORM:-macos}"
 bundle_id="${AAK_FIXTURE_BUNDLE_ID:-com.example.app.fixture}"
 log_subsystem="${AAK_FIXTURE_LOG_SUBSYSTEM:-com.example.app.fixture}"
 fixture_mode="${AAK_FIXTURE_MODE:-sterile-demo}"
@@ -54,13 +55,15 @@ import sys
     log_sha,
     log_size,
 ) = sys.argv[1:]
+fixture_platform = __import__("os").environ.get("AAK_FIXTURE_PLATFORM", "macos")
+command_class = "ios-simulator-fixture-ui-smoke" if fixture_platform == "ios" else "macos-fixture-ui-smoke"
 
 receipt = {
     "schemaVersion": "fixture-ui-smoke/v1",
     "kind": "fixture-ui-smoke.receipt",
     "adapter": {
         "name": "example-preview",
-        "platform": "macos",
+        "platform": fixture_platform,
     },
     "startedAt": started_at,
     "completedAt": completed_at,
@@ -74,7 +77,7 @@ receipt = {
     "commands": [
         {
             "id": "fixture-ui-smoke",
-            "class": "macos-fixture-ui-smoke",
+            "class": command_class,
             "summary": "Ran deterministic sterile fixture smoke scaffold",
             "durationSeconds": 0,
             "exitCode": 0,

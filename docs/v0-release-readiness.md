@@ -19,9 +19,12 @@ python3 scripts/aak.py validate-adapter templates/adapter.example.json --json
 python3 scripts/aak.py inspect --repo . --adapter templates/adapter.example.json --json
 python3 scripts/aak.py render-workflows --adapter templates/adapter.example.json --output /tmp/aak-v0-render --force
 test -f /tmp/aak-v0-render/macos-fixture-ui-smoke.yml
+test -f /tmp/aak-v0-render/ios-simulator-fixture-ui-smoke.yml
 python3 scripts/aak.py prepare-fixture-ui-smoke --adapter templates/adapter.example.json --script /tmp/aak-fixture-smoke.sh --approval fixture-ui-smoke --json
+python3 scripts/aak.py prepare-fixture-ui-smoke --adapter templates/adapter.example.json --script /tmp/aak-ios-fixture-smoke.sh --approval fixture-ui-smoke --platform ios --json
 bash templates/fixture-ui-smoke-command.example.sh
 python3 scripts/aak.py validate-fixture-ui-smoke-receipt templates/fixture-ui-smoke.receipt.example.json --json
+python3 scripts/aak.py validate-fixture-ui-smoke-receipt templates/ios-simulator-fixture-ui-smoke.receipt.example.json --json
 git ls-files docs/goals
 git diff --check
 ```

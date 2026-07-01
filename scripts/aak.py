@@ -103,6 +103,9 @@ def validate_adapter_data(adapter: dict[str, Any]) -> list[str]:
             for key in ("project", "scheme"):
                 if not config.get(key):
                     errors.append(f"platforms.{platform_name}.{key} is required")
+            simulator_destination = config.get("simulatorDestination")
+            if simulator_destination is not None and (not isinstance(simulator_destination, str) or not simulator_destination):
+                errors.append(f"platforms.{platform_name}.simulatorDestination must be a non-empty string when present")
 
     privacy = adapter.get("privacy")
     if not isinstance(privacy, dict):
@@ -435,8 +438,8 @@ def validate_fixture_ui_smoke_receipt_data(receipt: dict[str, Any]) -> list[str]
     reject_unknown_keys(adapter, {"name", "platform"}, errors, "adapter")
     require_string(adapter, "name", errors, "adapter")
     platform_name = require_string(adapter, "platform", errors, "adapter")
-    if platform_name and platform_name != "macos":
-        errors.append("adapter.platform must be macos")
+    if platform_name and platform_name not in {"macos", "ios"}:
+        errors.append("adapter.platform must be macos or ios")
 
     require_datetime_string(receipt, "startedAt", errors, "root")
     require_datetime_string(receipt, "completedAt", errors, "root")
@@ -886,8 +889,18 @@ def command_validate_fixture_ui_smoke_receipt_path(path: Path, *, json_output: b
     return 0
 
 
-def build_fixture_ui_smoke_plan(adapter: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+def build_fixture_ui_smoke_plan(adapter: dict[str, Any], *, platform_name: str = "macos") -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
+    if platform_name not in {"macos", "ios"}:
+        errors.append("platform must be macos or ios")
+
+    platforms = require_object(adapter, "platforms", errors, "adapter")
+    platform_config: dict[str, Any] = {}
+    if platform_name:
+        platform_config = platforms.get(platform_name) if isinstance(platforms.get(platform_name), dict) else {}
+        if not platform_config:
+            errors.append(f"adapter.platforms.{platform_name} must be configured for fixture UI smoke")
+
     automation = require_object(adapter, "automation", errors, "adapter")
     privacy = require_object(adapter, "privacy", errors, "adapter")
 
@@ -904,6 +917,10 @@ def build_fixture_ui_smoke_plan(adapter: dict[str, Any]) -> tuple[dict[str, Any]
         errors.append("adapter.privacy.redactSecrets must be true")
     if screenshots and screenshots not in {"none", "sterile-only"}:
         errors.append("adapter.privacy.screenshots must be none or sterile-only")
+
+    simulator_destination = ""
+    if platform_name == "ios":
+        simulator_destination = require_string(platform_config, "simulatorDestination", errors, "adapter.platforms.ios")
 
     receipt_path = automation.get("fixtureReceiptPath") or "artifacts/fixture-ui-smoke/fixture-ui-smoke.receipt.json"
     if not isinstance(receipt_path, str) or not receipt_path:
@@ -929,11 +946,13 @@ def build_fixture_ui_smoke_plan(adapter: dict[str, Any]) -> tuple[dict[str, Any]
     artifact_paths = list(dict.fromkeys([receipt_path, *allowed_globs] if receipt_path else allowed_globs))
     return (
         {
+            "platform": platform_name,
             "fixtureBundleIdentifier": fixture_bundle,
             "fixtureSmokeCommand": fixture_command,
             "logSubsystem": log_subsystem,
             "receiptPath": receipt_path,
             "artifactPaths": artifact_paths,
+            "simulatorDestination": simulator_destination,
             "physical_device_actions": False,
         },
         errors,
@@ -944,6 +963,8 @@ def write_github_output(path: Path, plan: dict[str, Any]) -> None:
     artifact_paths = plan.get("artifactPaths") or []
     with path.open("a", encoding="utf-8") as handle:
         handle.write(f"receipt_path={plan.get('receiptPath', '')}\n")
+        handle.write(f"platform={plan.get('platform', '')}\n")
+        handle.write(f"simulator_destination={plan.get('simulatorDestination', '')}\n")
         handle.write("artifact_paths<<EOF\n")
         handle.write("\n".join(str(item) for item in artifact_paths))
         handle.write("\nEOF\n")
@@ -962,7 +983,7 @@ def command_prepare_fixture_ui_smoke(args: argparse.Namespace) -> int:
     adapter, errors = load_and_validate_adapter(adapter_path)
     plan: dict[str, Any] = {}
     if adapter is not None:
-        plan, plan_errors = build_fixture_ui_smoke_plan(adapter)
+        plan, plan_errors = build_fixture_ui_smoke_plan(adapter, platform_name=args.platform)
         errors.extend(plan_errors)
 
     if errors:
@@ -979,12 +1000,15 @@ def command_prepare_fixture_ui_smoke(args: argparse.Namespace) -> int:
     script_lines = [
         "#!/bin/bash",
         "set -euo pipefail",
+        f"export AAK_FIXTURE_PLATFORM={shlex.quote(str(plan['platform']))}",
         f"export AAK_FIXTURE_RECEIPT_PATH={shlex.quote(str(plan['receiptPath']))}",
         f"export AAK_FIXTURE_BUNDLE_ID={shlex.quote(str(plan['fixtureBundleIdentifier']))}",
         f"export AAK_FIXTURE_LOG_SUBSYSTEM={shlex.quote(str(plan['logSubsystem']))}",
         str(plan["fixtureSmokeCommand"]),
         "",
     ]
+    if plan.get("simulatorDestination"):
+        script_lines.insert(5, f"export AAK_FIXTURE_SIMULATOR_DESTINATION={shlex.quote(str(plan['simulatorDestination']))}")
     script_path.write_text(
         "\n".join(script_lines),
         encoding="utf-8",
@@ -1001,8 +1025,10 @@ def command_prepare_fixture_ui_smoke(args: argparse.Namespace) -> int:
             "path": str(adapter_path),
             "plan": {
                 "artifactCount": len(plan.get("artifactPaths") or []),
+                "platform": plan.get("platform"),
                 "physical_device_actions": False,
                 "receiptPathConfigured": bool(plan.get("receiptPath")),
+                "simulatorDestinationConfigured": bool(plan.get("simulatorDestination")),
             },
         })
     else:
@@ -1120,7 +1146,7 @@ def render_text(template_name: str, text: str, adapter: dict[str, Any]) -> str:
 
     if template_name == "macos-ci.yml":
         text = text.replace("runs-on: macos-15", f"runs-on: {macos_runner}")
-    if template_name in {"ios-simulator-ci.yml", "ios-ci-eligibility.yml"}:
+    if template_name in {"ios-simulator-ci.yml", "ios-ci-eligibility.yml", "ios-simulator-fixture-ui-smoke.yml"}:
         text = text.replace("runs-on: macos-15", f"runs-on: {macos_runner}")
     if template_name == "ios-physical-device.yml":
         label_text = "[" + ", ".join(physical_labels) + "]"
@@ -1346,6 +1372,7 @@ def build_parser() -> argparse.ArgumentParser:
     fixture_prepare_parser.add_argument("--script", required=True, help="Output shell script path.")
     fixture_prepare_parser.add_argument("--github-output", help="Optional GITHUB_OUTPUT file to populate.")
     fixture_prepare_parser.add_argument("--approval", help="Optional approval token; must be fixture-ui-smoke when present.")
+    fixture_prepare_parser.add_argument("--platform", choices=["macos", "ios"], default="macos", help="Fixture platform to prepare.")
     fixture_prepare_parser.add_argument("--json", action="store_true", help="Emit JSON.")
     fixture_prepare_parser.set_defaults(func=command_prepare_fixture_ui_smoke)
 

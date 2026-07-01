@@ -6,7 +6,7 @@ Use this checklist when applying Apple Agent Kit to a private Apple app repo. Ke
 
 - Repo:
 - Platform: macOS / iOS / both
-- Lane: runner health / macOS CI eligibility / iOS CI eligibility / fixture UI smoke / simulator CI / physical device
+- Lane: runner health / macOS CI eligibility / iOS CI eligibility / macOS fixture UI smoke / iOS simulator fixture UI smoke / simulator CI / physical device
 - Approved hardware binding:
 - Explicit exclusions:
 - Dedicated runner-health checklist, if applicable:
@@ -52,6 +52,7 @@ Record:
 - Adapter validation result:
 - Render receipt path:
 - Render receipt reports `"physical_device_actions": false`:
+- iOS simulator fixture command exports the expected simulator destination:
 - Installed workflow YAML parse result:
 - Forbidden-command scan result:
 - Fixture UI smoke receipt path, if applicable:
