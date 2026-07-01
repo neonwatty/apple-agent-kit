@@ -12,6 +12,7 @@ Automation evidence should prove behavior without exposing private data.
 - artifact file paths
 - hashes or counts of sensitive objects
 - screenshots from sterile fixtures when the adapter allows them
+- bounded OSLog or structured log excerpts from sterile fixtures
 
 ## Not Allowed By Default
 
@@ -24,6 +25,8 @@ Automation evidence should prove behavior without exposing private data.
 ## Receipt Requirement
 
 Before declaring a run complete, the agent should try to disprove the result and record what it checked. Passing happy-path tests alone is not enough.
+
+Fixture UI smoke receipts should include the fixture target, log time window, expected events, observed event count, artifact allowlist, withheld artifacts, privacy assertions, and the strongest attempted disproof. Use sanitized event names or counts in public proof records; keep raw logs local or private when they expose paths, usernames, host details, or product data.
 
 For local Xcode readiness, prefer:
 

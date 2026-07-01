@@ -6,7 +6,7 @@ Use this checklist when applying Apple Agent Kit to a private Apple app repo. Ke
 
 - Repo:
 - Platform: macOS / iOS / both
-- Lane: runner health / macOS CI eligibility / iOS CI eligibility / simulator CI / physical device
+- Lane: runner health / macOS CI eligibility / iOS CI eligibility / fixture UI smoke / simulator CI / physical device
 - Approved hardware binding:
 - Explicit exclusions:
 - Dedicated runner-health checklist, if applicable:
@@ -26,6 +26,13 @@ Use this checklist when applying Apple Agent Kit to a private Apple app repo. Ke
 - Runner labels are private and specific.
 - Physical device labels stay separate from Mac runner labels.
 - Secrets and signing values are not committed.
+- Fixture UI smoke fields are present when the lane needs GUI evidence:
+  - `automation.fixtureBundleIdentifier`
+  - `automation.fixtureSmokeCommand`
+  - `automation.logSubsystem`
+  - `automation.allowedEvidence`
+  - `automation.fixtureReceiptPath`
+  - `automation.allowedArtifactGlobs`
 - Privacy policy is present:
   - `redactSecrets`
   - `rawAccessibilityTrees`
@@ -47,6 +54,9 @@ Record:
 - Render receipt reports `"physical_device_actions": false`:
 - Installed workflow YAML parse result:
 - Forbidden-command scan result:
+- Fixture UI smoke receipt path, if applicable:
+- Fixture target is sterile and not a personal app:
+- Fixture log evidence has bounded time window and sanitized content:
 
 ## Private PR
 
@@ -71,6 +81,12 @@ Record:
   - Matching online runner count:
   - Prohibited-action scan result:
   - App/device/product automation excluded:
+- Fixture UI smoke proof, if applicable:
+  - Sterile fixture or demo mode:
+  - Expected events observed:
+  - Screenshots allowed by policy:
+  - Raw private accessibility trees withheld:
+  - Non-fixture apps excluded:
 
 ## Completion Gate
 

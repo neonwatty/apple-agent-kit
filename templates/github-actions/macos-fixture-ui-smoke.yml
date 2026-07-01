@@ -1,0 +1,89 @@
+name: Apple Agent Kit macOS Fixture UI Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: Type fixture-ui-smoke to run the sterile fixture UI smoke lane
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-fixture-ui-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fixture-ui-smoke:
+    name: fixture UI smoke
+    runs-on: [self-hosted, macOS, apple-agent-kit]
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Checkout Apple Agent Kit
+        uses: actions/checkout@v6
+        with:
+          repository: neonwatty/apple-agent-kit
+          ref: main
+          path: .aak/apple-agent-kit
+
+      - name: Materialize private adapter
+        env:
+          APPLE_AGENT_KIT_ADAPTER_JSON: ${{ secrets.APPLE_AGENT_KIT_ADAPTER_JSON }}
+        run: |
+          set -euo pipefail
+          test -n "$APPLE_AGENT_KIT_ADAPTER_JSON"
+          printf '%s' "$APPLE_AGENT_KIT_ADAPTER_JSON" > .apple-agent-kit.json
+
+      - name: Validate private adapter
+        run: python3 .aak/apple-agent-kit/scripts/aak.py validate-adapter .apple-agent-kit.json --json
+
+      - name: Prepare fixture UI smoke command
+        id: fixture
+        run: |
+          set -euo pipefail
+          python3 .aak/apple-agent-kit/scripts/aak.py prepare-fixture-ui-smoke \
+            --adapter .apple-agent-kit.json \
+            --script .aak/fixture-ui-smoke-command.sh \
+            --github-output "$GITHUB_OUTPUT" \
+            --approval "${{ github.event.inputs.approval }}"
+
+      - name: Xcode readiness
+        run: python3 .aak/apple-agent-kit/scripts/aak.py check-xcode --json
+
+      - name: Run fixture UI smoke command
+        run: bash .aak/fixture-ui-smoke-command.sh
+
+      - name: Validate fixture UI smoke receipt
+        run: |
+          set -euo pipefail
+          python3 .aak/apple-agent-kit/scripts/aak.py validate-fixture-ui-smoke-receipt \
+            "${{ steps.fixture.outputs.receipt_path }}" \
+            --json
+
+      - name: Device boundary assertion
+        run: |
+          set -euo pipefail
+          echo "No physical-device actions, personal-app automation, raw private accessibility trees, or non-fixture screenshots are allowed by this workflow."
+
+      - name: Upload fixture UI smoke receipt
+        if: ${{ always() && steps.fixture.outputs.receipt_path != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: fixture-ui-smoke-receipt
+          path: ${{ steps.fixture.outputs.receipt_path }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload fixture UI smoke evidence
+        if: ${{ success() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: fixture-ui-smoke-evidence
+          path: ${{ steps.fixture.outputs.artifact_paths }}
+          if-no-files-found: warn
+          retention-days: 14

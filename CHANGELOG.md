@@ -8,4 +8,5 @@
 - Add a Manual Remote PR Session public contract, schemas, examples, workflow template, and validators.
 - Clarify Manual Remote PR Session Codex bridge surfaces with explicit CLI, Desktop-open, and Desktop-session request/receipt fields.
 - Add a slim Codex-native autoreview design and skill for PR closeout review.
+- Add a macOS fixture UI smoke skill, adapter fields, manual workflow template, receipt schema, validator, and receipt template for deterministic privacy-safe GUI evidence.
 - Keep repo-specific adapters and filled rollout boards out of the public release surface.

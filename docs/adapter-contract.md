@@ -32,6 +32,18 @@ The recommended file name is `.apple-agent-kit.json` for machine-readable use. Y
     "macosRunnerLabels": ["self-hosted", "macOS", "apple-agent-kit"],
     "physicalRunnerLabels": ["self-hosted", "macOS", "ios-physical"]
   },
+  "automation": {
+    "fixtureBundleIdentifier": "com.example.app.fixture",
+    "fixtureSmokeCommand": "make fixture-ui-smoke",
+    "logSubsystem": "com.example.app.fixture",
+    "allowedEvidence": ["logs", "sterile-screenshots"],
+    "fixtureReceiptPath": "artifacts/fixture-ui-smoke/fixture-ui-smoke.receipt.json",
+    "allowedArtifactGlobs": [
+      "artifacts/fixture-ui-smoke/fixture-ui-smoke.receipt.json",
+      "artifacts/fixture-ui-smoke/*.log",
+      "artifacts/fixture-ui-smoke/*.png"
+    ]
+  },
   "privacy": {
     "screenshots": "sterile-only",
     "rawAccessibilityTrees": false,
@@ -56,6 +68,12 @@ Validate an adapter with:
 python3 scripts/aak.py validate-adapter .apple-agent-kit.json
 ```
 
+Validate a fixture UI smoke receipt with:
+
+```bash
+python3 scripts/aak.py validate-fixture-ui-smoke-receipt fixture-ui-smoke.receipt.json
+```
+
 Render workflow templates into a scratch directory with:
 
 ```bash
@@ -69,6 +87,21 @@ Review rendered workflows before copying them into a private repository.
 - `ci.macosRunner` is for hosted or generic macOS CI templates that use a single `runs-on` value.
 - `ci.macosRunnerLabels` is for self-hosted Mac runner-health workflows that use label arrays.
 - `ci.physicalRunnerLabels` is for physical iOS workflows and should stay separate from device-free Mac runner health checks.
+
+## Fixture UI Smoke Fields
+
+The optional `automation` object describes sterile GUI smoke hooks for private repos. These fields are inert in the public kit unless a private workflow or operator explicitly runs the smoke command.
+
+- `automation.fixtureBundleIdentifier` is a sanitized fixture, test host, or demo-mode bundle identifier. Do not point it at personal apps or live-account surfaces.
+- `automation.fixtureSmokeCommand` is the private repo command that runs the deterministic UI smoke.
+- `automation.logSubsystem` names the fixture log subsystem or structured log source to collect.
+- `automation.allowedEvidence` should list only evidence classes allowed by policy, such as `logs`, `sterile-screenshots`, `result-bundles`, or `hashes`.
+- `automation.fixtureReceiptPath` is the relative path where the private smoke command writes the validated receipt.
+- `automation.allowedArtifactGlobs` is the relative allowlist uploaded by the manual fixture workflow.
+
+Use `templates/fixture-ui-smoke.receipt.example.json` when recording a fixture smoke proof. Keep filled receipts private if they include product-specific paths, log excerpts, bundle identifiers, or screenshots.
+
+Use `templates/fixture-ui-smoke-command.example.sh` as a private-repo starting point for writing the receipt and sanitized log artifact. Replace only the probe section with app-specific fixture automation; keep raw accessibility trees, host paths, account data, and non-fixture screenshots out of the receipt.
 
 ## Manual Remote PR Session Fields
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "macOS Fixture UI Smoke"
+  short_description: "Run privacy-safe macOS fixture UI smoke automation."
+  default_prompt: "Add or run a sterile macOS fixture UI smoke lane with sanitized evidence."
